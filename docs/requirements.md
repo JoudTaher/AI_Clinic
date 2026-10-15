@@ -10,9 +10,9 @@ All requests evaluate Section A. Chemical, biological, device, and animal-derive
 
 The checklist refers to Sections B through F, but no Section F is present.
 
-## Agreement Information
+## eRPM-Aligned Intake
 
-The form collects recipient institution and address, recipient scientist, provider scientist, material description, research purpose, duration, shipping-cost payer, and whether the material is provided at no cost. Missing agreement information is reported separately and never changes eligibility.
+The form follows the submitted worksheet's Introduction, Personnel, Material Details, Material Safety, and Outgoing Material Details sections. It includes the worksheet's material-type choices, recipient contacts, safety and export questions, experimental plan, relevant details, document upload, and sponsor field. Missing intake information is reported separately and never changes checklist eligibility.
 
 ## Template Selection
 
@@ -21,4 +21,3 @@ Template selection always requires review in this version. The supplied document
 ## Scope
 
 This local application is not connected to eRPM, does not provide legal approval, does not automate signatures, and does not generate agreements. Use synthetic data only.
-

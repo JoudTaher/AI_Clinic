@@ -17,9 +17,12 @@ DISCLAIMER = (
 
 def build_screening_report(request: Mapping[str, Any]) -> dict[str, Any]:
     eligibility = evaluate_eligibility(request)
+    raw_intake = request.get("erpm_intake", {})
+    erpm_intake = dict(raw_intake) if isinstance(raw_intake, Mapping) else {}
     return {
         "proof_of_concept": True,
         "disclaimer": DISCLAIMER,
+        "erpm_intake": erpm_intake,
         "eligibility": eligibility,
         "agreement_readiness": evaluate_agreement_readiness(request),
         "template_selection": evaluate_template_selection(request, eligibility),

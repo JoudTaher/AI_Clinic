@@ -11,31 +11,54 @@ st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", la
 ANSWER_OPTIONS = ("Unknown", "Yes", "No")
 ANSWER_VALUES = {"Unknown": None, "Yes": True, "No": False}
 
-CATEGORY_LABELS = {
-    "Chemical": "chemical",
-    "Biological": "biological",
-    "Device": "device",
-    "Animal derived": "animal_derived",
-    "Other or uncertain": "other",
+MATERIAL_TYPES = (
+    "Human derived materials (isolated tissue, samples, specimens, cells, etc.)",
+    "Cells (other than those derived from human subjects or patients)",
+    "Plasmid/vector (DNA or RNA)",
+    "Mouse/Rat",
+    "Other model organism (yeast, drosophila, zebrafish)",
+    "Custom antibody",
+    "Protein",
+    "Chemical compound",
+    "Software/code",
+    "Device",
+    "Other material",
+)
+
+MATERIAL_TYPE_TO_CATEGORY = {
+    MATERIAL_TYPES[0]: "biological",
+    MATERIAL_TYPES[1]: "biological",
+    MATERIAL_TYPES[2]: "biological",
+    MATERIAL_TYPES[3]: "animal_derived",
+    MATERIAL_TYPES[4]: "biological",
+    MATERIAL_TYPES[5]: "biological",
+    MATERIAL_TYPES[6]: "biological",
+    MATERIAL_TYPES[7]: "chemical",
+    MATERIAL_TYPES[8]: "other",
+    MATERIAL_TYPES[9]: "device",
+    MATERIAL_TYPES[10]: "other",
 }
 
 SECTION_TITLES = {
-    "A": "Section A General eligibility",
-    "B": "Section B Chemical materials",
-    "C": "Section C Biological materials",
-    "D": "Section D Devices",
-    "E": "Section E Animal materials",
+    "A": "General eligibility",
+    "B": "Chemical materials",
+    "C": "Biological materials",
+    "D": "Devices",
+    "E": "Animal materials",
 }
 
 
-def tri_state_input(label: str, field_id: str) -> bool | None:
-    answer = st.selectbox(
-        label,
-        ANSWER_OPTIONS,
-        key=f"eligibility_{field_id}",
-        help="Choose Yes only when the checklist statement is confirmed true.",
-    )
+def answer_input(label: str, key: str, help_text: str | None = None) -> bool | None:
+    answer = st.selectbox(label, ANSWER_OPTIONS, key=key, help=help_text)
     return ANSWER_VALUES[answer]
+
+
+def tri_state_input(label: str, field_id: str) -> bool | None:
+    return answer_input(
+        label,
+        key=f"eligibility_{field_id}",
+        help_text="Choose Yes only when the checklist statement is confirmed true.",
+    )
 
 
 def show_check_list(title: str, items: list[dict]) -> None:
@@ -48,110 +71,244 @@ def show_check_list(title: str, items: list[dict]) -> None:
 
 
 st.title("Outgoing MTA Screening Proof of Concept")
-st.caption(
-    "Local demonstration only · Not connected to eRPM · Not legal approval · Use synthetic data"
-)
+st.caption("Local demonstration only · Not connected to eRPM · Not legal approval")
 st.write(
-    "Complete the checklist below to test whether a request meets the supplied "
-    "criteria for the Streamlined Template Process."
+    "This intake follows the sections and field names in the submitted outgoing "
+    "MTA eRPM worksheet, then applies the separate streamlined-eligibility checklist."
 )
 
-selected_labels = st.multiselect(
-    "Material categories",
-    options=list(CATEGORY_LABELS),
-    help="Select every category that applies. Multiple categories are supported.",
-)
-selected_categories = [CATEGORY_LABELS[label] for label in selected_labels]
+st.subheader("Introduction")
+intro_left, intro_right = st.columns(2)
+with intro_left:
+    project_title = st.text_input("Project title")
+    st.text_input("Agreement category", value="Material Transfer Agreement", disabled=True)
+    st.text_input("Agreement type", value="Outgoing MTA", disabled=True)
+    paying_um_for_material = answer_input(
+        "Are you paying U-M for this material as a product or service from a company?",
+        "paying_um_for_material",
+        "Do not count a shipping fee as payment for the material.",
+    )
+with intro_right:
+    duration_years = st.number_input(
+        "Expected duration — years", min_value=0, step=1, value=0
+    )
+    duration_months = st.number_input(
+        "Expected duration — months", min_value=0, step=1, value=0
+    )
+    duration_comments = st.text_area("Duration comments")
+    copy_from_existing_ufa = answer_input(
+        "Copy data from an existing UFA record?", "copy_from_existing_ufa"
+    )
 
-with st.form("mta_intake"):
-    st.subheader("Part A General eligibility")
-    eligibility_answers: dict[str, bool | None] = {}
-    for criterion in SECTION_CRITERIA["A"]:
+st.subheader("Personnel")
+personnel_left, personnel_right = st.columns(2)
+with personnel_left:
+    contact_pi_name = st.text_input("Contact PI name")
+    contact_pi_phone = st.text_input("Contact PI phone")
+    contact_pi_email = st.text_input("Contact PI email")
+with personnel_right:
+    primary_ra_name = st.text_input("Primary Research Administrator name")
+    primary_ra_phone = st.text_input("Primary Research Administrator phone")
+    primary_ra_email = st.text_input("Primary Research Administrator email")
+measurable_personnel_effort = answer_input(
+    "Is there measurable personnel effort related to the unfunded agreement?",
+    "measurable_personnel_effort",
+)
+
+st.subheader("Material Details")
+material_types = st.multiselect("Material types", options=MATERIAL_TYPES)
+material_description = st.text_area("Plasmid/Vector/DNA/RNA description")
+
+st.subheader("Material Safety")
+safety_left, safety_middle, safety_right = st.columns(3)
+with safety_left:
+    radioactive = answer_input(
+        "Are any of the materials radioactive?", "radioactive"
+    )
+with safety_middle:
+    dangerous_to_handle = answer_input(
+        "Are materials dangerous to handle, store, or use?", "dangerous_to_handle"
+    )
+with safety_right:
+    hazardous_chemical_capacity_constraint = answer_input(
+        "Is this a hazardous chemical that has a capacity constraint?",
+        "hazardous_chemical_capacity_constraint",
+    )
+
+st.subheader("Outgoing Material Details")
+project_administrative_home = st.text_input("Project Administrative Home")
+will_deposit_in_repository = answer_input(
+    "Will material be deposited in a repository?", "will_deposit_in_repository"
+)
+
+recipient_left, recipient_right = st.columns(2)
+with recipient_left:
+    recipient_entity = st.text_input("Recipient entity")
+    recipient_scientist_name = st.text_input("Recipient scientist name")
+    recipient_scientist_email = st.text_input("Recipient scientist email")
+with recipient_right:
+    recipient_admin_name = st.text_input("Recipient administrative contact name")
+    recipient_admin_email = st.text_input("Recipient administrative contact email")
+    recipient_admin_street_address = st.text_input(
+        "Recipient administrative contact street address"
+    )
+    recipient_admin_telephone = st.text_input(
+        "Recipient administrative contact telephone"
+    )
+    recipient_admin_fax = st.text_input("Recipient administrative contact fax")
+
+leaving_country = answer_input(
+    "Is material, data, equipment, or software leaving the country?",
+    "leaving_country",
+)
+export_controlled = answer_input(
+    "Are you shipping export-controlled materials, data, equipment, or software?",
+    "export_controlled",
+)
+reimbursement_cost_or_fee = st.text_input(
+    "What reimbursement cost or fee (if any) will UM request from the recipient?"
+)
+experimental_plan = st.text_area(
+    "Recipient's experimental plan for use of the material",
+    help="The eRPM worksheet requests a brief description, limited to 200 words.",
+)
+return_required = answer_input(
+    "Is the recipient required to send anything in return for the material?",
+    "return_required",
+)
+previously_invention_report_or_licensed = answer_input(
+    "Were these materials previously described in a U-M invention report or licensed by U-M?",
+    "previously_invention_report_or_licensed",
+)
+external_funding_supported_development = answer_input(
+    "Did an externally funded project support development of the material?",
+    "external_funding_supported_development",
+)
+managed_affiliate_work = answer_input(
+    "Will U-M employees perform any work at a location on the Managed Affiliates list?",
+    "managed_affiliate_work",
+)
+made_using_third_party_materials = answer_input(
+    "Were these materials made using materials received from another party or a commercial purchase?",
+    "made_using_third_party_materials",
+)
+clinical_health_data_shared = answer_input(
+    "Will clinical health data be shared outside the University of Michigan?",
+    "clinical_health_data_shared",
+)
+related_details = st.text_area("Other relevant details about this transfer")
+related_documents = st.file_uploader(
+    "Related documents (optional)", accept_multiple_files=True
+)
+sponsor_name = st.text_input("Sponsor name (if applicable)")
+
+st.subheader("Streamlined Eligibility Review")
+st.caption(
+    "These checklist questions are not all present in eRPM, but they are needed for "
+    "the PoC's eligibility result."
+)
+
+selected_categories = list(
+    dict.fromkeys(MATERIAL_TYPE_TO_CATEGORY[item] for item in material_types)
+)
+eligibility_answers: dict[str, bool | None] = {}
+for criterion in SECTION_CRITERIA["A"]:
+    eligibility_answers[criterion.field_id] = tri_state_input(
+        criterion.label, criterion.field_id
+    )
+
+applicable_sections = [
+    section
+    for section in ("B", "C", "D", "E")
+    if any(CATEGORY_TO_SECTION.get(category) == section for category in selected_categories)
+]
+if not applicable_sections:
+    st.info("Select a material type above to show applicable material questions.")
+for section in applicable_sections:
+    st.markdown(f"#### {SECTION_TITLES[section]}")
+    for criterion in SECTION_CRITERIA[section]:
         eligibility_answers[criterion.field_id] = tri_state_input(
             criterion.label, criterion.field_id
         )
 
-    st.subheader("Part B Material specific eligibility")
-    applicable_sections = [
-        section
-        for section in ("B", "C", "D", "E")
-        if any(
-            CATEGORY_TO_SECTION.get(category) == section
-            for category in selected_categories
-        )
-    ]
-    if not applicable_sections:
-        st.info("Select one or more material categories above to show applicable questions.")
-    for section in applicable_sections:
-        st.markdown(f"#### {SECTION_TITLES[section]}")
-        for criterion in SECTION_CRITERIA[section]:
-            eligibility_answers[criterion.field_id] = tri_state_input(
-                criterion.label, criterion.field_id
-            )
-
-    st.subheader("Part C Agreement information")
-    left, right = st.columns(2)
-    with left:
-        recipient_institution_name = st.text_input("Recipient institution")
-        recipient_institution_address = st.text_area("Recipient institution address")
-        recipient_scientist_name = st.text_input("Recipient scientist")
-        provider_scientist_name = st.text_input("Provider scientist")
-        material_description = st.text_area("Material information")
-    with right:
-        recipient_research_purpose = st.text_area("Recipient research purpose")
-        requested_duration = st.text_input(
-            "Requested duration", placeholder="For example 3 years"
-        )
-        shipping_cost_label = st.selectbox(
-            "Who will pay shipping costs?",
-            ("Unknown", "Recipient", "Provider", "Other"),
-        )
-        no_cost_label = st.selectbox(
-            "Will the provider scientist provide the material at no cost?",
-            ANSWER_OPTIONS,
-        )
-
-    with st.expander("Optional template information"):
-        recipient_scientist_title = st.text_input("Recipient scientist title")
-        provider_scientist_title = st.text_input("Provider scientist title")
-        shipping_name = st.text_input("Shipping contact name")
-        shipping_address = st.text_area("Shipping address")
-        transmittal_fee_amount = st.text_input("Transmittal fee amount")
-        um_reference_number = st.text_input("UM reference number")
-        um_technology_transfer_file_number = st.text_input(
-            "UM technology transfer file number"
-        )
-
-    submitted = st.form_submit_button("Screen request", type="primary")
+submitted = st.button("Screen request", type="primary")
 
 if submitted:
-    shipping_cost_payer = {
-        "Unknown": None,
-        "Recipient": "recipient",
-        "Provider": "provider",
-        "Other": "other",
-    }[shipping_cost_label]
+    duration_parts = []
+    if duration_years:
+        duration_parts.append(f"{duration_years} year(s)")
+    if duration_months:
+        duration_parts.append(f"{duration_months} month(s)")
+    requested_duration = ", ".join(duration_parts)
+    if duration_comments.strip():
+        requested_duration = " — ".join(
+            part for part in (requested_duration, duration_comments.strip()) if part
+        )
+
+    erpm_intake = {
+        "project_title": project_title,
+        "agreement_category": "Material Transfer Agreement",
+        "agreement_type": "Outgoing MTA",
+        "paying_um_for_material": paying_um_for_material,
+        "duration_years": duration_years,
+        "duration_months": duration_months,
+        "duration_comments": duration_comments,
+        "copy_from_existing_ufa": copy_from_existing_ufa,
+        "contact_pi_name": contact_pi_name,
+        "contact_pi_phone": contact_pi_phone,
+        "contact_pi_email": contact_pi_email,
+        "primary_research_administrator_name": primary_ra_name,
+        "primary_research_administrator_phone": primary_ra_phone,
+        "primary_research_administrator_email": primary_ra_email,
+        "measurable_personnel_effort": measurable_personnel_effort,
+        "material_types": material_types,
+        "material_description": material_description,
+        "radioactive": radioactive,
+        "dangerous_to_handle_store_or_use": dangerous_to_handle,
+        "hazardous_chemical_capacity_constraint": hazardous_chemical_capacity_constraint,
+        "project_administrative_home": project_administrative_home,
+        "will_deposit_in_repository": will_deposit_in_repository,
+        "recipient_entity": recipient_entity,
+        "recipient_scientist_name": recipient_scientist_name,
+        "recipient_scientist_email": recipient_scientist_email,
+        "recipient_administrative_contact_name": recipient_admin_name,
+        "recipient_administrative_contact_email": recipient_admin_email,
+        "recipient_administrative_contact_street_address": recipient_admin_street_address,
+        "recipient_administrative_contact_telephone": recipient_admin_telephone,
+        "recipient_administrative_contact_fax": recipient_admin_fax,
+        "leaving_country": leaving_country,
+        "export_controlled": export_controlled,
+        "reimbursement_cost_or_fee": reimbursement_cost_or_fee,
+        "recipient_experimental_plan": experimental_plan,
+        "return_required": return_required,
+        "previously_invention_report_or_licensed": previously_invention_report_or_licensed,
+        "external_funding_supported_development": external_funding_supported_development,
+        "managed_affiliate_work": managed_affiliate_work,
+        "made_using_third_party_materials": made_using_third_party_materials,
+        "clinical_health_data_shared": clinical_health_data_shared,
+        "related_details": related_details,
+        "related_document_names": [document.name for document in related_documents],
+        "sponsor_name": sponsor_name,
+    }
 
     request = {
+        "erpm_intake": erpm_intake,
         "material_categories": selected_categories,
         "eligibility_answers": eligibility_answers,
         "agreement_information": {
-            "recipient_institution_name": recipient_institution_name,
-            "recipient_institution_address": recipient_institution_address,
+            "recipient_institution_name": recipient_entity,
+            "recipient_institution_address": recipient_admin_street_address,
             "recipient_scientist_name": recipient_scientist_name,
-            "recipient_scientist_title": recipient_scientist_title,
-            "provider_scientist_name": provider_scientist_name,
-            "provider_scientist_title": provider_scientist_title,
+            "provider_scientist_name": contact_pi_name,
             "material_description": material_description,
-            "recipient_research_purpose": recipient_research_purpose,
+            "recipient_research_purpose": experimental_plan,
             "requested_duration": requested_duration,
-            "shipping_cost_payer": shipping_cost_payer,
-            "material_provided_at_no_cost": ANSWER_VALUES[no_cost_label],
-            "shipping_name": shipping_name,
-            "shipping_address": shipping_address,
-            "transmittal_fee_amount": transmittal_fee_amount,
-            "um_reference_number": um_reference_number,
-            "um_technology_transfer_file_number": um_technology_transfer_file_number,
+            "shipping_cost_payer": (
+                "recipient" if reimbursement_cost_or_fee.strip() else None
+            ),
+            "material_provided_at_no_cost": (
+                None if paying_um_for_material is None else not paying_um_for_material
+            ),
         },
     }
 
@@ -174,7 +331,9 @@ if submitted:
         show_check_list("Passed checks", eligibility["passed_checks"])
         show_check_list("Failed checks", eligibility["failed_checks"])
     with result_right:
-        show_check_list("Missing or unresolved information", eligibility["missing_information"])
+        show_check_list(
+            "Missing or unresolved information", eligibility["missing_information"]
+        )
         readiness = report["agreement_readiness"]
         st.markdown("**Agreement information**")
         st.write(readiness["status"].replace("_", " ").title())
@@ -198,4 +357,3 @@ if submitted:
         file_name="mta_screening_report.json",
         mime="application/json",
     )
-

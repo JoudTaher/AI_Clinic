@@ -5,15 +5,19 @@ from tests.fixtures import human_samples_request, plasmid_request
 
 
 def test_report_contains_separate_decisions():
-    report = build_screening_report(plasmid_request())
+    request = plasmid_request()
+    request["erpm_intake"] = {"project_title": "Synthetic plasmid transfer"}
+    report = build_screening_report(request)
     assert report["proof_of_concept"] is True
     assert set(report) == {
         "proof_of_concept",
         "disclaimer",
+        "erpm_intake",
         "eligibility",
         "agreement_readiness",
         "template_selection",
     }
+    assert report["erpm_intake"] == {"project_title": "Synthetic plasmid transfer"}
     assert report["eligibility"]["status"] == "eligible"
     assert report["template_selection"]["selected_template"] is None
 
