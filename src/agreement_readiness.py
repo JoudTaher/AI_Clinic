@@ -8,10 +8,21 @@ TEXT_FIELDS = (
     "recipient_institution_name",
     "recipient_institution_address",
     "recipient_scientist_name",
+    "recipient_scientist_title",
     "provider_scientist_name",
+    "provider_scientist_title",
     "material_description",
     "recipient_research_purpose",
     "requested_duration",
+    "shipping_recipient_name",
+    "shipping_address",
+)
+
+AUTOMATED_CATEGORIES = {"biological", "chemical", "animal_derived"}
+RECIPIENT_OFFICIAL_FIELDS = (
+    "recipient_authorized_official_name",
+    "recipient_authorized_official_title",
+    "recipient_authorized_official_email",
 )
 
 SHIPPING_COST_PAYERS = {"recipient", "provider", "other"}
@@ -67,7 +78,9 @@ def _evaluate_erpm_readiness(information: Mapping[str, Any]) -> dict[str, Any]:
     years = information.get("duration_years")
     months = information.get("duration_months")
     valid_years = isinstance(years, int) and not isinstance(years, bool) and years >= 0
-    valid_months = isinstance(months, int) and not isinstance(months, bool) and months >= 0
+    valid_months = (
+        isinstance(months, int) and not isinstance(months, bool) and months >= 0
+    )
     if not valid_years or not valid_months or years + months <= 0:
         missing_fields.append("expected_duration")
 
@@ -78,11 +91,7 @@ def _evaluate_erpm_readiness(information: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
-    raw_erpm_intake = request.get("erpm_intake")
-    if isinstance(raw_erpm_intake, Mapping):
-        return _evaluate_erpm_readiness(raw_erpm_intake)
-
+def _evaluate_agreement_fields(request: Mapping[str, Any]) -> dict[str, Any]:
     raw_information = request.get("agreement_information", {})
     information = raw_information if isinstance(raw_information, Mapping) else {}
 
@@ -92,6 +101,30 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(information.get(field_id), str)
         or not information[field_id].strip()
     ]
+
+    categories = request.get("material_categories")
+    category = (
+        categories[0]
+        if isinstance(categories, list) and len(categories) == 1
+        else None
+    )
+    if category in {"chemical", "animal_derived"}:
+        signer_fields = RECIPIENT_OFFICIAL_FIELDS
+    elif category == "biological":
+        signer_fields = ("recipient_scientist_email",)
+        can_certify = information.get("recipient_scientist_can_certify_organization")
+        if not isinstance(can_certify, bool):
+            missing_fields.append("recipient_scientist_can_certify_organization")
+        if can_certify is False:
+            signer_fields += RECIPIENT_OFFICIAL_FIELDS
+    else:
+        signer_fields = ()
+    missing_fields.extend(
+        field_id
+        for field_id in signer_fields
+        if not isinstance(information.get(field_id), str)
+        or not information[field_id].strip()
+    )
 
     if information.get("shipping_cost_payer") not in SHIPPING_COST_PAYERS:
         missing_fields.append("shipping_cost_payer")
@@ -118,6 +151,52 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
     else:
         status = "ready"
 
+    return {
+        "status": status,
+        "missing_fields": list(dict.fromkeys(missing_fields)),
+        "review_reasons": review_reasons,
+    }
+
+
+def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
+    raw_categories = request.get("material_categories")
+    automatic_request = (
+        isinstance(raw_categories, list)
+        and len(raw_categories) == 1
+        and raw_categories[0] in AUTOMATED_CATEGORIES
+    )
+    raw_erpm_intake = request.get("erpm_intake")
+    erpm_result = (
+        _evaluate_erpm_readiness(raw_erpm_intake)
+        if isinstance(raw_erpm_intake, Mapping)
+        else None
+    )
+    agreement_result = (
+        _evaluate_agreement_fields(request) if automatic_request else None
+    )
+
+    if erpm_result is None:
+        return agreement_result or {
+            "status": "ready",
+            "missing_fields": [],
+            "review_reasons": [],
+        }
+    if agreement_result is None:
+        return erpm_result
+
+    missing_fields = list(
+        dict.fromkeys(
+            erpm_result["missing_fields"] + agreement_result["missing_fields"]
+        )
+    )
+    review_reasons = erpm_result["review_reasons"] + agreement_result["review_reasons"]
+    status = (
+        "missing_information"
+        if missing_fields
+        else "needs_review"
+        if review_reasons
+        else "ready"
+    )
     return {
         "status": status,
         "missing_fields": missing_fields,
