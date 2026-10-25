@@ -7,6 +7,10 @@ from src.pipeline.models import DeliveryReceipt, PipelineResult, RenderedAgreeme
 from src.templates.catalog import TemplateDefinition
 
 
+class DeliveryError(ValueError):
+    """Expected delivery-adapter failure that the pipeline can report safely."""
+
+
 class AgreementRenderer(Protocol):
     def render(
         self,

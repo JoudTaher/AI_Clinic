@@ -39,11 +39,15 @@ def select_template(
         )
 
     raw_categories = request.get("material_categories", [])
-    categories = (
-        list(dict.fromkeys(raw_categories))
-        if isinstance(raw_categories, list)
-        else []
-    )
+    if not isinstance(raw_categories, list) or not all(
+        isinstance(value, str) and value.strip() for value in raw_categories
+    ):
+        return _base_result(
+            "template_selection_requires_review",
+            [],
+            ["Material categories must be a list of non-empty strings."],
+        )
+    categories = list(dict.fromkeys(raw_categories))
     relevant = [
         definition
         for definition in definitions

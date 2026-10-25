@@ -16,8 +16,20 @@ The form follows the submitted worksheet's Introduction, Personnel, Material Det
 
 ## Template Selection
 
-Template selection always requires review in this version. The supplied documents do not define when to select among AUTM Biological, AUTM Chemical, the Simple Letter Agreement, and the UBMTA Implementing Letter. The app reports document-supported candidates but never selects one automatically.
+Template definitions live in a validated JSON catalog. Adding a template must not require selector-code changes.
+
+- A single eligible chemical request recommends AUTM Chemical.
+- A single eligible biological request recommends UBMTA only when the recipient is explicitly confirmed as a UBMTA signatory and Simple Letter authorization is false.
+- A single eligible biological request recommends the Simple Letter Agreement only when that agreement is explicitly authorized and UBMTA signatory status is false.
+- A single eligible biological request recommends AUTM Biological when both qualification answers are explicitly false.
+- Missing answers, conflicting answers, mixed categories, and unsupported categories require manual review.
+
+A recommendation is not final selection or legal approval. Generation or delivery preparation requires a named approver and an exact match between the approved and recommended template IDs.
+
+## Pipeline
+
+The modular backend follows `screen -> recommend -> approve -> copy source template -> prepare dry-run email`. A completed request ID is idempotent and cannot prepare a duplicate delivery within the pipeline store. Rendering preserves the supplied source template bytes; it does not alter legal language. The sender writes an inspectable local JSON package and performs no network action.
 
 ## Scope
 
-This local application is not connected to eRPM, does not provide legal approval, does not automate signatures, and does not generate agreements. Use synthetic data only.
+This local application is not connected to eRPM, does not provide legal approval, does not automate signatures, and does not send email. Use synthetic data only. Production storage, Outlook or Microsoft Graph, e-signature, SSO, and eRPM integrations are outside this version.

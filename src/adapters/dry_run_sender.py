@@ -7,6 +7,7 @@ from typing import Any
 
 from src.adapters.paths import safe_identifier
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
+from src.pipeline.ports import DeliveryError
 
 
 class DryRunSender:
@@ -25,9 +26,9 @@ class DryRunSender:
         intake = raw_intake if isinstance(raw_intake, Mapping) else {}
         recipient = intake.get("recipient_scientist_email")
         if not isinstance(recipient, str) or not recipient.strip():
-            raise ValueError("recipient_scientist_email is required for delivery")
+            raise DeliveryError("recipient_scientist_email is required for delivery")
         if not artifact.path.is_file():
-            raise ValueError(f"Agreement artifact does not exist: {artifact.path}")
+            raise DeliveryError(f"Agreement artifact does not exist: {artifact.path}")
 
         raw_title = intake.get("project_title")
         project_title = (

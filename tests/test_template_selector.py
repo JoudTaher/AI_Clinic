@@ -15,6 +15,10 @@ def test_eligible_chemical_request_reports_candidate_without_selecting():
     assert result["selected_template"] is None
     assert result["recommended_template"] == "autm_chemical"
     assert result["candidate_templates"] == ["autm_chemical"]
+    assert "source_path" not in result["candidate_details"][0]
+    assert result["candidate_details"][0]["source_file"] == (
+        "Template_AUTM_MTA_for_Chemical_Materials.docx"
+    )
 
 
 def test_eligible_biological_request_reports_three_candidates():
@@ -106,3 +110,15 @@ def test_mixed_request_never_selects_candidate():
         "simple_letter_agreement",
         "ubmta_implementing_letter",
     ]
+
+
+def test_malformed_material_categories_fail_closed_instead_of_crashing():
+    request = request_for("chemical")
+    request["material_categories"] = [{"invalid": True}]
+
+    result = evaluate_template_selection(request, {"status": "eligible"})
+
+    assert result["status"] == "template_selection_requires_review"
+    assert result["recommended_template"] is None
+    assert result["candidate_templates"] == []
+    assert any("non-empty strings" in reason for reason in result["review_reasons"])

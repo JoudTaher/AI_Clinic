@@ -1,6 +1,6 @@
 # Outgoing MTA Screening Proof of Concept
 
-A local Streamlit application that mirrors the submitted outgoing MTA eRPM worksheet, evaluates the supplied eligibility checklist, explains the decision, and reports template-selection questions for manual review.
+A local Streamlit application that mirrors the submitted outgoing MTA eRPM worksheet, evaluates eligibility, and recommends an agreement from a configurable template catalog. Unclear or conflicting requests stop for manual review.
 
 ## Run It
 
@@ -28,6 +28,18 @@ cd /Users/joudtaher/Documents/AI_Clinic
 .venv/bin/python -m pytest -v
 ```
 
+## Backend Structure
+
+```text
+src/templates/   template catalog, validation, and matching rules
+src/pipeline/    screening, approval, idempotency, and workflow states
+src/adapters/    reference-template copying and local dry-run delivery
+```
+
+The initial catalog contains the four supplied agreements. Add another template by placing its source file in `reference_files/` and adding one validated entry to `src/templates/catalog.json`; the matching engine does not need to be rewritten.
+
+Every recommendation requires a named approver. The included sender only creates a local JSON email package under `outputs/`; it never sends a real message.
+
 ## Important Limits
 
-This is a proof of concept using synthetic data. It is not connected to eRPM, does not provide legal approval, does not select a final agreement automatically, and does not create or sign an agreement.
+This is a proof of concept using synthetic data. It is not connected to eRPM, does not provide legal approval, does not fill or sign legal agreements, and does not send email. Live email, e-signature, authentication, and production persistence require separate reviewed adapters.

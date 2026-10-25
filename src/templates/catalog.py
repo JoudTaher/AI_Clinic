@@ -27,7 +27,7 @@ class TemplateDefinition:
         return {
             "template_id": self.template_id,
             "display_name": self.display_name,
-            "source_path": str(self.source_path),
+            "source_file": self.source_path.name,
             "material_categories": list(self.material_categories),
             "required_context": dict(self.required_context),
         }

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
+from src.pipeline.ports import DeliveryError
 from tests.fixtures import request_for
 
 
@@ -30,6 +31,15 @@ class RecordingSender:
         )
 
 
+class FailingSender:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(self, request_id, request, artifact):
+        self.calls += 1
+        raise DeliveryError("delivery provider unavailable")
+
+
 def pipeline_with_recorders():
     renderer = RecordingRenderer()
     sender = RecordingSender()
@@ -43,6 +53,17 @@ def test_ambiguous_template_stops_before_rendering():
     result = pipeline.run("REQ-1", request)
 
     assert result.status == "manual_review_required"
+    assert renderer.calls == 0
+    assert sender.calls == 0
+
+
+def test_empty_request_id_is_rejected_before_processing():
+    pipeline, renderer, sender = pipeline_with_recorders()
+
+    result = pipeline.run("   ", request_for("chemical"))
+
+    assert result.status == "invalid_request"
+    assert "request_id" in result.reasons
     assert renderer.calls == 0
     assert sender.calls == 0
 
@@ -71,6 +92,24 @@ def test_approval_must_match_the_recommendation():
     )
 
     assert result.status == "approval_mismatch"
+    assert renderer.calls == 0
+    assert sender.calls == 0
+
+
+def test_agreement_readiness_review_stops_before_rendering():
+    pipeline, renderer, sender = pipeline_with_recorders()
+    request = request_for("chemical")
+    request["agreement_information"]["material_provided_at_no_cost"] = False
+
+    result = pipeline.run(
+        "REQ-REVIEW",
+        request,
+        approved_template_id="autm_chemical",
+        approved_by="Example Approver",
+    )
+
+    assert result.status == "manual_review_required"
+    assert any("cost_terms_require_review" in reason for reason in result.reasons)
     assert renderer.calls == 0
     assert sender.calls == 0
 
@@ -112,5 +151,48 @@ def test_completed_request_id_is_idempotent():
     )
 
     assert second == first
+    assert renderer.calls == 1
+    assert sender.calls == 1
+
+
+def test_reused_request_id_with_changed_data_is_rejected():
+    pipeline, renderer, sender = pipeline_with_recorders()
+    original = request_for("chemical")
+    changed = request_for("chemical")
+    changed["agreement_information"]["material_description"] = "Different material"
+    pipeline.run(
+        "REQ-6",
+        original,
+        approved_template_id="autm_chemical",
+        approved_by="Example Approver",
+    )
+
+    result = pipeline.run(
+        "REQ-6",
+        changed,
+        approved_template_id="autm_chemical",
+        approved_by="Example Approver",
+    )
+
+    assert result.status == "idempotency_conflict"
+    assert renderer.calls == 1
+    assert sender.calls == 1
+
+
+def test_delivery_adapter_failure_is_reported_without_marking_complete():
+    renderer = RecordingRenderer()
+    sender = FailingSender()
+    pipeline = OutgoingMTAPipeline(renderer, sender)
+
+    result = pipeline.run(
+        "REQ-FAIL",
+        request_for("chemical"),
+        approved_template_id="autm_chemical",
+        approved_by="Example Approver",
+    )
+
+    assert result.status == "delivery_failed"
+    assert result.reasons == ("delivery provider unavailable",)
+    assert "delivery_failed" in result.audit_events
     assert renderer.calls == 1
     assert sender.calls == 1
