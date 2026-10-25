@@ -11,8 +11,9 @@ def test_ineligible_request_has_no_template_selection():
 
 def test_eligible_chemical_request_reports_candidate_without_selecting():
     result = evaluate_template_selection(request_for("chemical"), {"status": "eligible"})
-    assert result["status"] == "template_selection_requires_review"
+    assert result["status"] == "recommendation_ready"
     assert result["selected_template"] is None
+    assert result["recommended_template"] == "autm_chemical"
     assert result["candidate_templates"] == ["autm_chemical"]
 
 
@@ -27,11 +28,70 @@ def test_eligible_biological_request_reports_three_candidates():
     ]
 
 
+def test_biological_request_recommends_ubmta_for_a_signatory():
+    request = request_for("biological")
+    request["template_context"] = {
+        "recipient_ubmta_signatory": True,
+        "simple_letter_authorized": False,
+    }
+
+    result = evaluate_template_selection(request, {"status": "eligible"})
+
+    assert result["status"] == "recommendation_ready"
+    assert result["recommended_template"] == "ubmta_implementing_letter"
+    assert result["candidate_templates"] == ["ubmta_implementing_letter"]
+
+
+def test_biological_request_recommends_simple_letter_when_authorized():
+    request = request_for("biological")
+    request["template_context"] = {
+        "recipient_ubmta_signatory": False,
+        "simple_letter_authorized": True,
+    }
+
+    result = evaluate_template_selection(request, {"status": "eligible"})
+
+    assert result["status"] == "recommendation_ready"
+    assert result["recommended_template"] == "simple_letter_agreement"
+
+
+def test_biological_request_recommends_autm_when_both_qualifiers_are_false():
+    request = request_for("biological")
+    request["template_context"] = {
+        "recipient_ubmta_signatory": False,
+        "simple_letter_authorized": False,
+    }
+
+    result = evaluate_template_selection(request, {"status": "eligible"})
+
+    assert result["status"] == "recommendation_ready"
+    assert result["recommended_template"] == "autm_biological"
+
+
+def test_conflicting_biological_qualifiers_require_manual_review():
+    request = request_for("biological")
+    request["template_context"] = {
+        "recipient_ubmta_signatory": True,
+        "simple_letter_authorized": True,
+    }
+
+    result = evaluate_template_selection(request, {"status": "eligible"})
+
+    assert result["status"] == "template_selection_requires_review"
+    assert result["recommended_template"] is None
+    assert result["candidate_templates"] == [
+        "simple_letter_agreement",
+        "ubmta_implementing_letter",
+    ]
+    assert any("conflicting" in reason.lower() for reason in result["review_reasons"])
+
+
 def test_device_only_request_reports_no_candidate():
     result = evaluate_template_selection(request_for("device"), {"status": "eligible"})
     assert result["status"] == "template_selection_requires_review"
     assert result["selected_template"] is None
     assert result["candidate_templates"] == []
+    assert result["recommended_template"] is None
 
 
 def test_mixed_request_never_selects_candidate():
