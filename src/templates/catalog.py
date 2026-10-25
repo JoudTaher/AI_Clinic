@@ -22,6 +22,7 @@ class TemplateDefinition:
     source_path: Path
     material_categories: tuple[str, ...]
     required_context: dict[str, bool]
+    automation_enabled: bool = True
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -30,6 +31,7 @@ class TemplateDefinition:
             "source_file": self.source_path.name,
             "material_categories": list(self.material_categories),
             "required_context": dict(self.required_context),
+            "automation_enabled": self.automation_enabled,
         }
 
 
@@ -91,12 +93,19 @@ def _definition(raw: Any, index: int, project_root: Path) -> TemplateDefinition:
             f"Template at index {index} required_context must map names to booleans"
         )
 
+    automation_enabled = raw.get("automation_enabled")
+    if not isinstance(automation_enabled, bool):
+        raise CatalogError(
+            f"Template at index {index} automation_enabled must be a boolean"
+        )
+
     return TemplateDefinition(
         template_id=template_id,
         display_name=display_name,
         source_path=_source_path(source_file, project_root, index),
         material_categories=tuple(dict.fromkeys(raw_categories)),
         required_context=dict(raw_context),
+        automation_enabled=automation_enabled,
     )
 
 

@@ -25,7 +25,9 @@ def test_report_contains_separate_decisions():
         "live_delivery_enabled": False,
     }
     assert report["eligibility"]["status"] == "eligible"
-    assert report["template_selection"]["selected_template"] is None
+    assert report["template_selection"]["selected_template"] == (
+        "ubmta_implementing_letter"
+    )
 
 
 def test_human_samples_failure_is_preserved():

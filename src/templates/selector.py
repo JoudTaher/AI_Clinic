@@ -12,11 +12,12 @@ def _base_result(
     reasons: list[str],
     *,
     recommended_template: str | None = None,
+    selected_template: str | None = None,
     missing_context: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "status": status,
-        "selected_template": None,
+        "selected_template": selected_template,
         "recommended_template": recommended_template,
         "candidate_templates": [item.template_id for item in candidates],
         "candidate_details": [item.as_dict() for item in candidates],
@@ -43,7 +44,7 @@ def select_template(
         isinstance(value, str) and value.strip() for value in raw_categories
     ):
         return _base_result(
-            "template_selection_requires_review",
+            "route_to_erpm",
             [],
             ["Material categories must be a list of non-empty strings."],
         )
@@ -51,7 +52,8 @@ def select_template(
     relevant = [
         definition
         for definition in definitions
-        if any(category in definition.material_categories for category in categories)
+        if definition.automation_enabled
+        and any(category in definition.material_categories for category in categories)
     ]
 
     if len(categories) != 1:
@@ -60,63 +62,24 @@ def select_template(
             if not categories
             else "Mixed material categories require manual template review."
         )
-        return _base_result("template_selection_requires_review", relevant, [reason])
+        return _base_result("route_to_erpm", relevant, [reason])
 
-    raw_context = request.get("template_context", {})
-    context = raw_context if isinstance(raw_context, Mapping) else {}
-    exact_ids: set[str] = set()
-    possible_ids: set[str] = set()
-    missing_fields: set[str] = set()
-
-    for definition in relevant:
-        mismatched = False
-        unresolved: list[str] = []
-        for field_id, expected in definition.required_context.items():
-            value = context.get(field_id)
-            if not isinstance(value, bool):
-                unresolved.append(field_id)
-            elif value is not expected:
-                mismatched = True
-                break
-        if mismatched:
-            continue
-        if unresolved:
-            possible_ids.add(definition.template_id)
-            missing_fields.update(unresolved)
-        else:
-            exact_ids.add(definition.template_id)
-
-    candidate_ids = exact_ids | possible_ids
-    candidates = [
-        definition
-        for definition in relevant
-        if definition.template_id in candidate_ids
-    ]
-
-    if len(exact_ids) == 1 and not possible_ids:
-        recommendation = next(iter(exact_ids))
+    if len(relevant) == 1:
+        selected = relevant[0].template_id
         return _base_result(
-            "recommendation_ready",
-            candidates,
-            ["A human approver must confirm the recommendation before delivery."],
-            recommended_template=recommendation,
+            "template_selected",
+            relevant,
+            ["Selected automatically from the approved material-type rule."],
+            selected_template=selected,
         )
 
-    reasons: list[str] = []
-    if len(exact_ids) > 1:
-        reasons.append("Template criteria are conflicting; manual review is required.")
-    if missing_fields:
-        reasons.append(
-            "Template qualification information is missing: "
-            + ", ".join(sorted(missing_fields))
-        )
-    if not candidates:
-        reasons.append("No configured template matches this request.")
-    if not reasons:
-        reasons.append("Template selection requires manual review.")
+    reasons = (
+        ["No automation-enabled template matches this request; route to eRPM."]
+        if not relevant
+        else ["More than one automation-enabled template matches; route to eRPM."]
+    )
     return _base_result(
-        "template_selection_requires_review",
-        candidates,
+        "route_to_erpm",
+        relevant,
         reasons,
-        missing_context=sorted(missing_fields),
     )

@@ -16,6 +16,15 @@ def test_default_catalog_contains_every_supplied_agreement():
         "ubmta_implementing_letter",
     ]
     assert all(template.source_path.is_file() for template in catalog)
+    automated = {
+        template.template_id: template.automation_enabled for template in catalog
+    }
+    assert automated == {
+        "autm_chemical": True,
+        "autm_biological": True,
+        "simple_letter_agreement": False,
+        "ubmta_implementing_letter": True,
+    }
 
 
 def test_new_template_can_be_added_without_selector_code_changes(tmp_path: Path):
@@ -31,6 +40,7 @@ def test_new_template_can_be_added_without_selector_code_changes(tmp_path: Path)
                     "source_file": source.name,
                     "material_categories": ["biological"],
                     "required_context": {"approved_for_new_template": True},
+                    "automation_enabled": True,
                 }
             ]
         ),
@@ -41,6 +51,7 @@ def test_new_template_can_be_added_without_selector_code_changes(tmp_path: Path)
 
     assert catalog[0].template_id == "new_template"
     assert catalog[0].required_context == {"approved_for_new_template": True}
+    assert catalog[0].automation_enabled is True
 
 
 def test_catalog_rejects_a_missing_required_field(tmp_path: Path):
@@ -72,6 +83,7 @@ def test_catalog_rejects_duplicate_ids(tmp_path: Path):
         "source_file": source.name,
         "material_categories": ["chemical"],
         "required_context": {},
+        "automation_enabled": True,
     }
     catalog_path = tmp_path / "catalog.json"
     catalog_path.write_text(json.dumps([definition, definition]), encoding="utf-8")

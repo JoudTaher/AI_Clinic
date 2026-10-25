@@ -21,6 +21,7 @@ class DeliveryReceipt:
 class PipelineResult:
     request_id: str
     status: str
+    selected_template: str | None = None
     recommended_template: str | None = None
     artifact_path: str | None = None
     delivery_reference: str | None = None
@@ -32,6 +33,7 @@ class PipelineResult:
         return {
             "request_id": self.request_id,
             "status": self.status,
+            "selected_template": self.selected_template,
             "recommended_template": self.recommended_template,
             "artifact_path": self.artifact_path,
             "delivery_reference": self.delivery_reference,

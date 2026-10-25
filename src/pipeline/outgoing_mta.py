@@ -46,8 +46,6 @@ class OutgoingMTAPipeline:
         self,
         request_id: str,
         request: Mapping[str, Any],
-        approved_template_id: str | None = None,
-        approved_by: str | None = None,
     ) -> PipelineResult:
         if not isinstance(request_id, str) or not request_id.strip():
             return PipelineResult(
@@ -97,49 +95,30 @@ class OutgoingMTAPipeline:
             )
             return PipelineResult(
                 request_id=request_id,
-                status="manual_review_required",
+                status="routed_to_erpm",
                 reasons=review_reasons,
                 audit_events=("intake_checked", "agreement_review_required"),
             )
 
         eligibility = evaluate_eligibility(request)
         selection = select_template(request, eligibility, self.catalog)
-        recommendation = selection["recommended_template"]
+        selected_template = selection["selected_template"]
         audit = ("intake_checked", "eligibility_screened", "template_evaluated")
 
-        if selection["status"] != "recommendation_ready":
+        if selection["status"] != "template_selected":
             return PipelineResult(
                 request_id=request_id,
-                status="manual_review_required",
-                recommended_template=recommendation,
+                status="routed_to_erpm",
                 reasons=tuple(selection["review_reasons"]),
-                audit_events=audit,
-            )
-
-        if not approved_template_id or not isinstance(approved_by, str) or not approved_by.strip():
-            return PipelineResult(
-                request_id=request_id,
-                status="approval_required",
-                recommended_template=recommendation,
-                reasons=("A named approver must approve the recommended template.",),
-                audit_events=audit,
-            )
-
-        if approved_template_id != recommendation:
-            return PipelineResult(
-                request_id=request_id,
-                status="approval_mismatch",
-                recommended_template=recommendation,
-                reasons=("The approved template does not match the recommendation.",),
-                audit_events=audit,
+                audit_events=audit + ("routed_to_erpm",),
             )
 
         template = next(
             definition
             for definition in self.catalog
-            if definition.template_id == recommendation
+            if definition.template_id == selected_template
         )
-        approved_audit = audit + (f"approved:{approved_by.strip()}",)
+        approved_audit = audit + ("auto_approved:standard_rules",)
         artifact = self.renderer.render(request_id, template, request)
         try:
             receipt = self.sender.send(request_id, request, artifact)
@@ -147,7 +126,7 @@ class OutgoingMTAPipeline:
             return PipelineResult(
                 request_id=request_id,
                 status="delivery_failed",
-                recommended_template=recommendation,
+                selected_template=selected_template,
                 artifact_path=str(artifact.path),
                 request_fingerprint=request_fingerprint,
                 reasons=(str(error),),
@@ -157,7 +136,7 @@ class OutgoingMTAPipeline:
         result = PipelineResult(
             request_id=request_id,
             status=receipt.status,
-            recommended_template=recommendation,
+            selected_template=selected_template,
             artifact_path=str(artifact.path),
             delivery_reference=receipt.reference,
             request_fingerprint=request_fingerprint,

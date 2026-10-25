@@ -4,34 +4,31 @@
     "display_name": "AUTM MTA for Chemical Materials",
     "source_file": "reference_files/Template_AUTM_MTA_for_Chemical_Materials.docx",
     "material_categories": ["chemical"],
-    "required_context": {}
+    "required_context": {},
+    "automation_enabled": true
   },
   {
     "id": "autm_biological",
     "display_name": "AUTM MTA for Biological Materials",
     "source_file": "reference_files/Template_AUTM_MTA_for_Biological_Materials.doc",
-    "material_categories": ["biological"],
-    "required_context": {
-      "recipient_ubmta_signatory": false,
-      "simple_letter_authorized": false
-    }
+    "material_categories": ["animal_derived"],
+    "required_context": {},
+    "automation_enabled": true
   },
   {
     "id": "simple_letter_agreement",
     "display_name": "Simple Letter Agreement",
     "source_file": "reference_files/Template_Simple Letter Agreement.docx",
     "material_categories": ["biological"],
-    "required_context": {
-      "simple_letter_authorized": true
-    }
+    "required_context": {},
+    "automation_enabled": false
   },
   {
     "id": "ubmta_implementing_letter",
     "display_name": "UBMTA Implementing Letter",
     "source_file": "reference_files/Template_UBMTA.docx",
     "material_categories": ["biological"],
-    "required_context": {
-      "recipient_ubmta_signatory": true
-    }
+    "required_context": {},
+    "automation_enabled": true
   }
 ]
