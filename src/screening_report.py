@@ -14,6 +14,12 @@ DISCLAIMER = (
     "transfer, and is not connected to eRPM."
 )
 
+DELIVERY_POLICY = {
+    "approval_required": True,
+    "delivery_mode": "dry_run",
+    "live_delivery_enabled": False,
+}
+
 
 def build_screening_report(request: Mapping[str, Any]) -> dict[str, Any]:
     eligibility = evaluate_eligibility(request)
@@ -22,6 +28,7 @@ def build_screening_report(request: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "proof_of_concept": True,
         "disclaimer": DISCLAIMER,
+        "delivery_policy": dict(DELIVERY_POLICY),
         "erpm_intake": erpm_intake,
         "eligibility": eligibility,
         "agreement_readiness": evaluate_agreement_readiness(request),

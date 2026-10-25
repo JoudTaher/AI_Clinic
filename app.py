@@ -202,6 +202,18 @@ related_documents = st.file_uploader(
 )
 sponsor_name = st.text_input("Sponsor name (if applicable)")
 
+st.markdown("#### Template qualification")
+recipient_ubmta_signatory = answer_input(
+    "Is the recipient a verified UBMTA signatory?",
+    "recipient_ubmta_signatory",
+    "Unknown answers stop automatic recommendation and require manual review.",
+)
+simple_letter_authorized = answer_input(
+    "Has the Simple Letter Agreement been authorized for this request?",
+    "simple_letter_authorized",
+    "This must reflect an approved institutional rule, not an applicant preference.",
+)
+
 st.subheader("Streamlined Eligibility Review")
 st.caption(
     "These checklist questions are not all present in eRPM, but they are needed for "
@@ -295,6 +307,10 @@ if submitted:
         "erpm_intake": erpm_intake,
         "material_categories": selected_categories,
         "eligibility_answers": eligibility_answers,
+        "template_context": {
+            "recipient_ubmta_signatory": recipient_ubmta_signatory,
+            "simple_letter_authorized": simple_letter_authorized,
+        },
         "agreement_information": {
             "recipient_institution_name": recipient_entity,
             "recipient_institution_address": recipient_admin_street_address,
@@ -343,6 +359,17 @@ if submitted:
     template_result = report["template_selection"]
     st.markdown("**Template review**")
     st.write(template_result["status"].replace("_", " ").title())
+    if template_result["recommended_template"]:
+        recommended_id = template_result["recommended_template"]
+        recommended_detail = next(
+            detail
+            for detail in template_result["candidate_details"]
+            if detail["template_id"] == recommended_id
+        )
+        st.success(
+            "Recommended template: " + recommended_detail["display_name"]
+        )
+        st.caption("A named human approver is required before delivery preparation.")
     if template_result["candidate_templates"]:
         st.write(
             "Document-supported candidates: "

@@ -12,12 +12,18 @@ def test_report_contains_separate_decisions():
     assert set(report) == {
         "proof_of_concept",
         "disclaimer",
+        "delivery_policy",
         "erpm_intake",
         "eligibility",
         "agreement_readiness",
         "template_selection",
     }
     assert report["erpm_intake"] == {"project_title": "Synthetic plasmid transfer"}
+    assert report["delivery_policy"] == {
+        "approval_required": True,
+        "delivery_mode": "dry_run",
+        "live_delivery_enabled": False,
+    }
     assert report["eligibility"]["status"] == "eligible"
     assert report["template_selection"]["selected_template"] is None
 

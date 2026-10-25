@@ -29,6 +29,10 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert "Recipient entity" in labels
     assert "Recipient scientist email" in labels
     assert "Recipient's experimental plan for use of the material" in labels
+    assert "Is the recipient a verified UBMTA signatory?" in labels
+    assert (
+        "Has the Simple Letter Agreement been authorized for this request?" in labels
+    )
     assert any(button.label == "Screen request" for button in app.button)
 
 
