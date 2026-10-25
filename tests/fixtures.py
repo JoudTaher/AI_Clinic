@@ -41,12 +41,17 @@ COMPLETE_AGREEMENT_INFORMATION = {
     "recipient_institution_name": "Example University",
     "recipient_institution_address": "100 Research Way, Example, MI 48100",
     "recipient_scientist_name": "Dr. Recipient",
+    "recipient_scientist_title": "Associate Professor",
     "provider_scientist_name": "Dr. Provider",
+    "provider_scientist_title": "Professor",
     "material_description": "Synthetic plasmid pExample",
     "recipient_research_purpose": "Non-commercial laboratory research",
     "requested_duration": "3 years",
     "shipping_cost_payer": "recipient",
     "material_provided_at_no_cost": True,
+    "shipping_recipient_name": "Dr. Recipient",
+    "shipping_address": "100 Research Way, Example, MI 48100",
+    "transmittal_fee": "$125.00",
 }
 
 
@@ -79,4 +84,3 @@ def human_samples_request() -> dict:
 
 def ids(entries: list[dict]) -> list[str]:
     return [entry["field_id"] for entry in entries]
-

@@ -1,0 +1,111 @@
+from pathlib import Path
+from zipfile import ZipFile
+
+import pytest
+from docx import Document
+from lxml import etree
+
+from src.adapters.docx_renderer import DocxAgreementRenderer, UnsupportedTemplateError
+from src.agreements.data import AgreementDataError
+from src.templates.catalog import load_template_catalog
+from tests.fixtures import request_for
+
+
+def template(template_id: str):
+    return next(
+        definition
+        for definition in load_template_catalog()
+        if definition.template_id == template_id
+    )
+
+
+def document_text(path: Path) -> str:
+    document = Document(path)
+    values = [paragraph.text for paragraph in document.paragraphs]
+    for table in document.tables:
+        for row in table.rows:
+            values.extend(cell.text for cell in row.cells)
+    return "\n".join(values)
+
+
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "autm_chemical"),
+        ("animal_derived", "autm_biological"),
+    ],
+)
+def test_autm_renderer_populates_parties_scientists_material_and_shipping(
+    tmp_path: Path, category: str, template_id: str
+):
+    renderer = DocxAgreementRenderer(tmp_path)
+
+    artifact = renderer.render("REQ-100", template(template_id), request_for(category))
+
+    assert artifact.path.suffix == ".docx"
+    text = document_text(artifact.path)
+    for expected in (
+        "The Regents of the University of Michigan",
+        "Example University",
+        "Dr. Provider",
+        "Professor",
+        "Dr. Recipient",
+        "Associate Professor",
+        "Synthetic plasmid pExample",
+        "100 Research Way, Example, MI 48100",
+    ):
+        assert expected in text
+    assert "Expression is faulty" not in text
+    with ZipFile(artifact.path) as package:
+        root = etree.fromstring(package.read("word/document.xml"))
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    signature_table = root.xpath(".//w:tbl", namespaces=namespace)[3]
+    assert signature_table.xpath(".//w:instrText", namespaces=namespace) == []
+    populated_provider = root.xpath(".//w:tbl", namespaces=namespace)[0].xpath(
+        "./w:tr", namespaces=namespace
+    )[1].xpath("./w:tc", namespaces=namespace)[1]
+    assert populated_provider.xpath(".//w:highlight", namespaces=namespace) == []
+
+
+def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Path):
+    renderer = DocxAgreementRenderer(tmp_path)
+
+    artifact = renderer.render(
+        "REQ-101", template("ubmta_implementing_letter"), request_for("biological")
+    )
+
+    text = document_text(artifact.path)
+    assert "Organization:\tExample University" in text
+    assert "Dr. Provider" in text
+    assert "Professor" in text
+    assert "Dr. Recipient" in text
+    assert "Associate Professor" in text
+    assert "Synthetic plasmid pExample" in text
+    assert "$125.00" in text
+    assert "[enter amount]" not in text
+    assert "FACULTY MEMBER" not in text
+    assert "FACULTY TITLE" not in text
+    assert "$125.00This Implementing Letter" not in text
+    with ZipFile(artifact.path) as package:
+        document_xml = package.read("word/document.xml")
+    assert b'w:type="page"' in document_xml
+
+
+def test_renderer_rejects_missing_required_agreement_data(tmp_path: Path):
+    request = request_for("chemical")
+    request["agreement_information"]["recipient_scientist_title"] = ""
+    renderer = DocxAgreementRenderer(tmp_path)
+
+    with pytest.raises(AgreementDataError, match="recipient_scientist_title"):
+        renderer.render("REQ-102", template("autm_chemical"), request)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_renderer_rejects_non_automated_template(tmp_path: Path):
+    renderer = DocxAgreementRenderer(tmp_path)
+
+    with pytest.raises(UnsupportedTemplateError, match="simple_letter_agreement"):
+        renderer.render(
+            "REQ-103", template("simple_letter_agreement"), request_for("biological")
+        )

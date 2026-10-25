@@ -10,7 +10,7 @@
   {
     "id": "autm_biological",
     "display_name": "AUTM MTA for Biological Materials",
-    "source_file": "reference_files/Template_AUTM_MTA_for_Biological_Materials.doc",
+    "source_file": "reference_files/Template_AUTM_MTA_for_Biological_Materials.docx",
     "material_categories": ["animal_derived"],
     "required_context": {},
     "automation_enabled": true
