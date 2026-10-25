@@ -13,6 +13,7 @@ from lxml import etree
 from src.adapters.paths import safe_identifier
 from src.agreements.data import AgreementData
 from src.pipeline.models import RenderedAgreement
+from src.pipeline.ports import AgreementRenderError
 from src.templates.catalog import TemplateDefinition
 
 
@@ -21,7 +22,7 @@ XML_NS = "http://www.w3.org/XML/1998/namespace"
 NS = {"w": WORD_NS}
 
 
-class UnsupportedTemplateError(ValueError):
+class UnsupportedTemplateError(AgreementRenderError):
     """Raised when no safe population strategy exists for a template."""
 
 

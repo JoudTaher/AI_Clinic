@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
+from src.adapters.docx_renderer import DocxAgreementRenderer
+from src.adapters.signnow_package_sender import SignNowPackageSender
 from src.eligibility import CATEGORY_TO_SECTION, SECTION_CRITERIA
+from src.pipeline.outgoing_mta import OutgoingMTAPipeline
 from src.screening_report import build_screening_report, serialize_screening_report
+from src.signing.config import SigningConfiguration, SigningConfigurationError
 
 
 st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", layout="wide")
@@ -70,14 +76,16 @@ def show_check_list(title: str, items: list[dict]) -> None:
         st.markdown(f"- {item['label']}  \n  `[{item['field_id']}]`")
 
 
-st.title("Outgoing MTA Screening Proof of Concept")
-st.caption("Local demonstration only · Not connected to eRPM · Not legal approval")
+st.title("Outgoing MTA Automation Proof of Concept")
+st.caption("Automatic standard-request routing · Local SignNow package · No network send")
 st.write(
     "This intake follows the sections and field names in the submitted outgoing "
-    "MTA eRPM worksheet, then applies the separate streamlined-eligibility checklist."
+    "MTA eRPM worksheet. Standard requests are processed automatically; all other "
+    "requests route to eRPM."
 )
 
 st.subheader("Introduction")
+request_id = st.text_input("Request ID")
 intro_left, intro_right = st.columns(2)
 with intro_left:
     project_title = st.text_input("Project title")
@@ -104,6 +112,7 @@ st.subheader("Personnel")
 personnel_left, personnel_right = st.columns(2)
 with personnel_left:
     contact_pi_name = st.text_input("Contact PI name")
+    contact_pi_title = st.text_input("U-M provider scientist title")
     contact_pi_phone = st.text_input("Contact PI phone")
     contact_pi_email = st.text_input("Contact PI email")
 with personnel_right:
@@ -145,6 +154,7 @@ recipient_left, recipient_right = st.columns(2)
 with recipient_left:
     recipient_entity = st.text_input("Recipient entity")
     recipient_scientist_name = st.text_input("Recipient scientist name")
+    recipient_scientist_title = st.text_input("Recipient scientist title")
     recipient_scientist_email = st.text_input("Recipient scientist email")
 with recipient_right:
     recipient_admin_name = st.text_input("Recipient administrative contact name")
@@ -156,6 +166,26 @@ with recipient_right:
         "Recipient administrative contact telephone"
     )
     recipient_admin_fax = st.text_input("Recipient administrative contact fax")
+
+shipping_left, shipping_right = st.columns(2)
+with shipping_left:
+    shipping_recipient_name = st.text_input("Shipping recipient name")
+with shipping_right:
+    shipping_address = st.text_input("Shipping address")
+
+st.markdown("#### Recipient signing information")
+recipient_scientist_can_certify = answer_input(
+    "Is the recipient scientist authorized to certify for the recipient organization?",
+    "recipient_scientist_can_certify",
+    "This determines whether the UBMTA needs a separate recipient organization certifier.",
+)
+official_left, official_middle, official_right = st.columns(3)
+with official_left:
+    recipient_official_name = st.text_input("Recipient authorized official name")
+with official_middle:
+    recipient_official_title = st.text_input("Recipient authorized official title")
+with official_right:
+    recipient_official_email = st.text_input("Recipient authorized official email")
 
 leaving_country = answer_input(
     "Is material, data, equipment, or software leaving the country?",
@@ -202,18 +232,6 @@ related_documents = st.file_uploader(
 )
 sponsor_name = st.text_input("Sponsor name (if applicable)")
 
-st.markdown("#### Template qualification")
-recipient_ubmta_signatory = answer_input(
-    "Is the recipient a verified UBMTA signatory?",
-    "recipient_ubmta_signatory",
-    "Unknown answers stop automatic recommendation and require manual review.",
-)
-simple_letter_authorized = answer_input(
-    "Has the Simple Letter Agreement been authorized for this request?",
-    "simple_letter_authorized",
-    "This must reflect an approved institutional rule, not an applicant preference.",
-)
-
 st.subheader("Streamlined Eligibility Review")
 st.caption(
     "These checklist questions are not all present in eRPM, but they are needed for "
@@ -243,7 +261,7 @@ for section in applicable_sections:
             criterion.label, criterion.field_id
         )
 
-submitted = st.button("Screen request", type="primary")
+submitted = st.button("Process request", type="primary")
 
 if submitted:
     duration_parts = []
@@ -307,24 +325,33 @@ if submitted:
         "erpm_intake": erpm_intake,
         "material_categories": selected_categories,
         "eligibility_answers": eligibility_answers,
-        "template_context": {
-            "recipient_ubmta_signatory": recipient_ubmta_signatory,
-            "simple_letter_authorized": simple_letter_authorized,
-        },
         "agreement_information": {
             "recipient_institution_name": recipient_entity,
             "recipient_institution_address": recipient_admin_street_address,
             "recipient_scientist_name": recipient_scientist_name,
+            "recipient_scientist_title": recipient_scientist_title,
+            "recipient_scientist_email": recipient_scientist_email,
+            "recipient_scientist_can_certify_organization": (
+                recipient_scientist_can_certify
+            ),
+            "recipient_authorized_official_name": recipient_official_name,
+            "recipient_authorized_official_title": recipient_official_title,
+            "recipient_authorized_official_email": recipient_official_email,
             "provider_scientist_name": contact_pi_name,
+            "provider_scientist_title": contact_pi_title,
+            "provider_scientist_email": contact_pi_email,
             "material_description": material_description,
             "recipient_research_purpose": experimental_plan,
             "requested_duration": requested_duration,
             "shipping_cost_payer": (
-                "recipient" if reimbursement_cost_or_fee.strip() else None
+                "recipient" if reimbursement_cost_or_fee.strip() else "provider"
             ),
             "material_provided_at_no_cost": (
                 None if paying_um_for_material is None else not paying_um_for_material
             ),
+            "shipping_recipient_name": shipping_recipient_name,
+            "shipping_address": shipping_address,
+            "transmittal_fee": reimbursement_cost_or_fee,
         },
     }
 
@@ -338,7 +365,7 @@ if submitted:
     elif eligibility["status"] == "ineligible":
         st.error("Not eligible for the Streamlined Template Process")
     else:
-        st.warning("Manual review required")
+        st.warning("This request will route to eRPM")
     st.write(eligibility["explanation"])
     st.caption("Evaluated sections: " + ", ".join(eligibility["evaluated_sections"]))
 
@@ -357,19 +384,16 @@ if submitted:
             st.write("Missing: " + ", ".join(readiness["missing_fields"]))
 
     template_result = report["template_selection"]
-    st.markdown("**Template review**")
+    st.markdown("**Automatic template decision**")
     st.write(template_result["status"].replace("_", " ").title())
-    if template_result["recommended_template"]:
-        recommended_id = template_result["recommended_template"]
-        recommended_detail = next(
+    if template_result["selected_template"]:
+        selected_id = template_result["selected_template"]
+        selected_detail = next(
             detail
             for detail in template_result["candidate_details"]
-            if detail["template_id"] == recommended_id
+            if detail["template_id"] == selected_id
         )
-        st.success(
-            "Recommended template: " + recommended_detail["display_name"]
-        )
-        st.caption("A named human approver is required before delivery preparation.")
+        st.success("Selected template: " + selected_detail["display_name"])
     if template_result["candidate_templates"]:
         st.write(
             "Document-supported candidates: "
@@ -377,6 +401,61 @@ if submitted:
         )
     for reason in template_result["review_reasons"]:
         st.caption(reason)
+
+    pipeline_result = None
+    configuration_error = None
+    if (
+        template_result["status"] == "template_selected"
+        and report["agreement_readiness"]["status"] == "ready"
+    ):
+        try:
+            signing_configuration = SigningConfiguration.from_environment()
+        except SigningConfigurationError as error:
+            configuration_error = str(error)
+        else:
+            project_root = Path(__file__).resolve().parent
+            pipeline = OutgoingMTAPipeline(
+                renderer=DocxAgreementRenderer(project_root / "outputs" / "agreements"),
+                sender=SignNowPackageSender(
+                    project_root / "outputs" / "signing", signing_configuration
+                ),
+            )
+            pipeline_result = pipeline.run(request_id, request)
+
+    st.markdown("**Automation result**")
+    if configuration_error:
+        st.error("Signing package blocked: " + configuration_error)
+    elif pipeline_result is not None:
+        if pipeline_result.status == "prepared_for_signature":
+            st.success("Agreement and local SignNow package are ready.")
+            agreement_path = Path(pipeline_result.artifact_path or "")
+            manifest_path = Path(pipeline_result.delivery_reference or "")
+            if agreement_path.is_file():
+                st.download_button(
+                    "Download populated agreement",
+                    data=agreement_path.read_bytes(),
+                    file_name=agreement_path.name,
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "wordprocessingml.document"
+                    ),
+                )
+            if manifest_path.is_file():
+                st.download_button(
+                    "Download signing manifest",
+                    data=manifest_path.read_text(encoding="utf-8"),
+                    file_name=manifest_path.name,
+                    mime="application/json",
+                )
+        elif pipeline_result.status == "routed_to_erpm":
+            st.warning("Request is outside the automatic path and must continue in eRPM.")
+        else:
+            detail = "; ".join(pipeline_result.reasons) or pipeline_result.status
+            st.error("Automatic processing stopped: " + detail)
+    elif report["agreement_readiness"]["status"] != "ready":
+        st.warning("Complete the missing agreement information and process again.")
+    else:
+        st.info("No automatic agreement was created; continue this request in eRPM.")
 
     st.download_button(
         "Download screening report",

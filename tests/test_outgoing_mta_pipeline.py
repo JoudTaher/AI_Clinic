@@ -2,7 +2,7 @@ from pathlib import Path
 
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
-from src.pipeline.ports import DeliveryError
+from src.pipeline.ports import AgreementRenderError, DeliveryError
 from tests.fixtures import request_for
 
 
@@ -25,8 +25,8 @@ class RecordingSender:
     def send(self, request_id, request, artifact):
         self.calls += 1
         return DeliveryReceipt(
-            status="prepared_for_delivery",
-            mode="dry_run",
+            status="prepared_for_signature",
+            mode="signnow_package",
             reference=f"dry-run:{request_id}",
         )
 
@@ -38,6 +38,11 @@ class FailingSender:
     def send(self, request_id, request, artifact):
         self.calls += 1
         raise DeliveryError("delivery provider unavailable")
+
+
+class FailingRenderer:
+    def render(self, request_id, template, request):
+        raise AgreementRenderError("recipient signer data is incomplete")
 
 
 def pipeline_with_recorders():
@@ -74,7 +79,7 @@ def test_standard_request_is_auto_approved_and_prepared():
 
     result = pipeline.run("REQ-2", request)
 
-    assert result.status == "prepared_for_delivery"
+    assert result.status == "prepared_for_signature"
     assert result.selected_template == "autm_chemical"
     assert "auto_approved:standard_rules" in result.audit_events
     assert renderer.calls == 1
@@ -94,13 +99,14 @@ def test_agreement_readiness_review_stops_before_rendering():
     assert sender.calls == 0
 
 
-def test_auto_selected_request_is_rendered_and_prepared_for_delivery():
+def test_auto_selected_request_is_rendered_and_prepared_for_signature():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("chemical")
 
     result = pipeline.run("REQ-4", request)
 
-    assert result.status == "prepared_for_delivery"
+    assert result.status == "prepared_for_signature"
+    assert result.delivery_mode == "signnow_package"
     assert result.artifact_path == "/tmp/REQ-4-autm_chemical.docx"
     assert result.delivery_reference == "dry-run:REQ-4"
     assert "auto_approved:standard_rules" in result.audit_events
@@ -146,3 +152,15 @@ def test_delivery_adapter_failure_is_reported_without_marking_complete():
     assert "delivery_failed" in result.audit_events
     assert renderer.calls == 1
     assert sender.calls == 1
+
+
+def test_rendering_failure_is_reported_without_calling_sender():
+    sender = RecordingSender()
+    pipeline = OutgoingMTAPipeline(FailingRenderer(), sender)
+
+    result = pipeline.run("REQ-RENDER-FAIL", request_for("chemical"))
+
+    assert result.status == "generation_failed"
+    assert result.reasons == ("recipient signer data is incomplete",)
+    assert "agreement_generation_failed" in result.audit_events
+    assert sender.calls == 0

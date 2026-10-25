@@ -1,6 +1,6 @@
-# Outgoing MTA Screening Proof of Concept
+# Outgoing MTA Automation Proof of Concept
 
-A local Streamlit application that mirrors the submitted outgoing MTA eRPM worksheet, evaluates eligibility, and recommends an agreement from a configurable template catalog. Unclear or conflicting requests stop for manual review.
+A local Streamlit application that evaluates an outgoing MTA request, selects and fills the approved agreement, and creates a U-M SignNow-ready package. It does not make network requests.
 
 ## Run It
 
@@ -21,6 +21,17 @@ cd /Users/joudtaher/Documents/AI_Clinic
 ./run_app.command
 ```
 
+Before preparing a signing package, configure the U-M institutional signer in the same Terminal window:
+
+```bash
+export MTA_UM_SIGNER_NAME="Approved signer name"
+export MTA_UM_SIGNER_TITLE="Approved signer title"
+export MTA_UM_SIGNER_EMAIL="approved.signer@umich.edu"
+./run_app.command
+```
+
+The signer values are deployment configuration, not questionnaire answers. If they are absent, the app still opens but blocks package preparation with a clear error.
+
 ## Test It
 
 ```bash
@@ -32,14 +43,21 @@ cd /Users/joudtaher/Documents/AI_Clinic
 
 ```text
 src/templates/   template catalog, validation, and matching rules
-src/pipeline/    screening, approval, idempotency, and workflow states
-src/adapters/    reference-template copying and local dry-run delivery
+src/agreements/  normalized agreement data
+src/pipeline/    eligibility, routing, idempotency, and workflow states
+src/signing/     deployment-owned signer configuration
+src/adapters/    DOCX population and local SignNow-package creation
 ```
 
-The initial catalog contains the four supplied agreements. Add another template by placing its source file in `reference_files/` and adding one validated entry to `src/templates/catalog.json`; the matching engine does not need to be rewritten.
+Automatic mapping is fixed to the confirmed rules:
 
-Every recommendation requires a named approver. The included sender only creates a local JSON email package under `outputs/`; it never sends a real message.
+- Chemical → AUTM Chemical
+- Biological → UBMTA Implementing Letter
+- Non-living animal-derived → AUTM Biological
+- Device, mixed, unsupported, or nonstandard → eRPM
 
-## Important Limits
+The Simple Letter remains in the catalog but is disabled until its institutional rule is confirmed. Generated DOCX files and signing manifests are written under `outputs/`.
 
-This is a proof of concept using synthetic data. It is not connected to eRPM, does not provide legal approval, does not fill or sign legal agreements, and does not send email. Live email, e-signature, authentication, and production persistence require separate reviewed adapters.
+## Current Boundary
+
+This version fills agreements and creates local signing manifests. It does not upload to SignNow, send email, sign documents, or connect to eRPM. A future authenticated U-M SignNow adapter can replace the local package adapter without changing the eligibility, selection, or rendering code.

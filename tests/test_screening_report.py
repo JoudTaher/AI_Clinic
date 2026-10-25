@@ -20,9 +20,10 @@ def test_report_contains_separate_decisions():
     }
     assert report["erpm_intake"] == {"project_title": "Synthetic plasmid transfer"}
     assert report["delivery_policy"] == {
-        "approval_required": True,
-        "delivery_mode": "dry_run",
+        "internal_approval_required": False,
+        "delivery_mode": "signnow_package",
         "live_delivery_enabled": False,
+        "nonstandard_route": "eRPM",
     }
     assert report["eligibility"]["status"] == "eligible"
     assert report["template_selection"]["selected_template"] == (
@@ -42,5 +43,5 @@ def test_serialized_report_is_valid_deterministic_json():
     serialized = serialize_screening_report(report)
     assert json.loads(serialized) == report
     assert serialized.endswith("\n")
-    assert "signed agreement" not in serialized.lower()
-    assert "legal approval" in serialized.lower()
+    assert "live submission" in serialized.lower()
+    assert "legal approval" not in serialized.lower()

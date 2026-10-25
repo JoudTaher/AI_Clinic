@@ -7,7 +7,7 @@ def test_app_loads_erpm_aligned_intake_sections():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     assert not app.exception
-    assert app.title[0].value == "Outgoing MTA Screening Proof of Concept"
+    assert app.title[0].value == "Outgoing MTA Automation Proof of Concept"
     headings = [item.value for item in app.subheader]
     assert headings[:5] == [
         "Introduction",
@@ -28,12 +28,15 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert "Plasmid/Vector/DNA/RNA description" in labels
     assert "Recipient entity" in labels
     assert "Recipient scientist email" in labels
+    assert "Recipient scientist title" in labels
+    assert "Recipient authorized official email" in labels
+    assert "U-M provider scientist title" in labels
     assert "Recipient's experimental plan for use of the material" in labels
-    assert "Is the recipient a verified UBMTA signatory?" in labels
+    assert "Is the recipient a verified UBMTA signatory?" not in labels
     assert (
-        "Has the Simple Letter Agreement been authorized for this request?" in labels
+        "Has the Simple Letter Agreement been authorized for this request?" not in labels
     )
-    assert any(button.label == "Screen request" for button in app.button)
+    assert any(button.label == "Process request" for button in app.button)
 
 
 def test_material_types_match_the_erpm_form():
@@ -56,3 +59,14 @@ def test_material_types_match_the_erpm_form():
         "Device",
         "Other material",
     ]
+
+
+def test_empty_submission_fails_closed_without_crashing():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+
+    next(button for button in app.button if button.label == "Process request").click()
+    app.run(timeout=10)
+
+    assert not app.exception
+    assert any("missing agreement information" in item.value.lower() for item in app.warning)

@@ -11,6 +11,10 @@ class DeliveryError(ValueError):
     """Expected delivery-adapter failure that the pipeline can report safely."""
 
 
+class AgreementRenderError(ValueError):
+    """Expected agreement-generation failure that the pipeline can report safely."""
+
+
 class AgreementRenderer(Protocol):
     def render(
         self,

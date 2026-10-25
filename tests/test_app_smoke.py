@@ -1,0 +1,41 @@
+from pathlib import Path
+
+import pytest
+
+from src.adapters.docx_renderer import DocxAgreementRenderer
+from src.adapters.signnow_package_sender import SignNowPackageSender
+from src.pipeline.outgoing_mta import OutgoingMTAPipeline
+from src.signing.config import SigningConfiguration
+from tests.fixtures import request_for
+
+
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "autm_chemical"),
+        ("biological", "ubmta_implementing_letter"),
+        ("animal_derived", "autm_biological"),
+    ],
+)
+def test_real_standard_workflow_creates_agreement_and_signing_package(
+    tmp_path: Path, category: str, template_id: str
+):
+    pipeline = OutgoingMTAPipeline(
+        renderer=DocxAgreementRenderer(tmp_path / "agreements"),
+        sender=SignNowPackageSender(
+            tmp_path / "signing",
+            SigningConfiguration(
+                um_signer_name="Morgan Michigan",
+                um_signer_title="Authorized Official",
+                um_signer_email="morgan@umich.edu",
+            ),
+        ),
+    )
+
+    result = pipeline.run(f"SMOKE-{category}", request_for(category))
+
+    assert result.status == "prepared_for_signature"
+    assert result.selected_template == template_id
+    assert result.delivery_mode == "signnow_package"
+    assert Path(result.artifact_path or "").is_file()
+    assert Path(result.delivery_reference or "").is_file()

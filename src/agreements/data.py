@@ -4,8 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from src.pipeline.ports import AgreementRenderError
 
-class AgreementDataError(ValueError):
+
+class AgreementDataError(AgreementRenderError):
     """Raised when required agreement population data is missing."""
 
 

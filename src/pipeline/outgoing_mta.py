@@ -9,6 +9,7 @@ from src.agreement_readiness import evaluate_agreement_readiness
 from src.eligibility import evaluate_eligibility
 from src.pipeline.models import PipelineResult
 from src.pipeline.ports import (
+    AgreementRenderError,
     AgreementRenderer,
     AgreementSender,
     DeliveryError,
@@ -119,7 +120,17 @@ class OutgoingMTAPipeline:
             if definition.template_id == selected_template
         )
         approved_audit = audit + ("auto_approved:standard_rules",)
-        artifact = self.renderer.render(request_id, template, request)
+        try:
+            artifact = self.renderer.render(request_id, template, request)
+        except AgreementRenderError as error:
+            return PipelineResult(
+                request_id=request_id,
+                status="generation_failed",
+                selected_template=selected_template,
+                request_fingerprint=request_fingerprint,
+                reasons=(str(error),),
+                audit_events=approved_audit + ("agreement_generation_failed",),
+            )
         try:
             receipt = self.sender.send(request_id, request, artifact)
         except DeliveryError as error:
@@ -139,8 +150,10 @@ class OutgoingMTAPipeline:
             selected_template=selected_template,
             artifact_path=str(artifact.path),
             delivery_reference=receipt.reference,
+            delivery_mode=receipt.mode,
             request_fingerprint=request_fingerprint,
-            audit_events=approved_audit + ("agreement_rendered", "delivery_prepared"),
+            audit_events=approved_audit
+            + ("agreement_rendered", "signing_package_prepared"),
         )
         self.store.save(result)
         return result

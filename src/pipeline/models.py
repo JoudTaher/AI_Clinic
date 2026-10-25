@@ -25,6 +25,7 @@ class PipelineResult:
     recommended_template: str | None = None
     artifact_path: str | None = None
     delivery_reference: str | None = None
+    delivery_mode: str | None = None
     request_fingerprint: str | None = None
     reasons: tuple[str, ...] = ()
     audit_events: tuple[str, ...] = ()
@@ -37,6 +38,7 @@ class PipelineResult:
             "recommended_template": self.recommended_template,
             "artifact_path": self.artifact_path,
             "delivery_reference": self.delivery_reference,
+            "delivery_mode": self.delivery_mode,
             "request_fingerprint": self.request_fingerprint,
             "reasons": list(self.reasons),
             "audit_events": list(self.audit_events),

@@ -10,14 +10,15 @@ from src.template_selector import evaluate_template_selection
 
 
 DISCLAIMER = (
-    "This local proof of concept is not legal approval, does not authorize a "
-    "transfer, and is not connected to eRPM."
+    "This proof of concept automatically processes only documented standard "
+    "requests. It creates a local signing package and performs no live submission."
 )
 
 DELIVERY_POLICY = {
-    "approval_required": True,
-    "delivery_mode": "dry_run",
+    "internal_approval_required": False,
+    "delivery_mode": "signnow_package",
     "live_delivery_enabled": False,
+    "nonstandard_route": "eRPM",
 }
 
 

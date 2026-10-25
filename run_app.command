@@ -7,7 +7,7 @@ if [[ ! -x .venv/bin/python ]]; then
   python3 -m venv .venv
 fi
 
-if ! .venv/bin/python -c 'import streamlit, pytest' 2>/dev/null; then
+if ! .venv/bin/python -c 'import streamlit, pytest, docx, lxml' 2>/dev/null; then
   .venv/bin/python -m pip install -r requirements.txt
 fi
 
