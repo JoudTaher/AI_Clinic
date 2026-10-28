@@ -186,6 +186,29 @@ def test_domestic_university_name_satisfies_nonprofit_institution_rule():
     assert "recipient_is_us_nonprofit" in ids(result["passed_checks"])
 
 
+def test_us_institutional_email_satisfies_nonprofit_rule_for_department_name():
+    request = plasmid_request()
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "Research and medicine department",
+            "recipient_scientist_email": "scientist@nih.gov",
+            "recipient_administrative_contact_email": "admin@nih.gov",
+            "leaving_country": False,
+            "paying_for_material_as_product_or_service": False,
+            "recipient_experimental_plan": "Research in the medicine department",
+            "related_details": "",
+        }
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "eligible"
+    assert result["missing_information"] == []
+    passed = ids(result["passed_checks"])
+    assert "recipient_is_us_nonprofit" in passed
+    assert "internal_noncommercial_research_only" in passed
+
+
 def test_completed_original_form_style_plasmid_request_is_eligible():
     request = plasmid_request()
     request["erpm_intake"].update(
