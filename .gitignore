@@ -5,5 +5,6 @@ __pycache__/
 .pytest_cache/
 .streamlit/
 .superpowers/
+.agents/
 outputs/*
 !outputs/.gitkeep
