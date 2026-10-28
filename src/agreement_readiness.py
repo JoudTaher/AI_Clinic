@@ -45,7 +45,7 @@ def _missing_text(information: Mapping[str, Any], fields: tuple[str, ...]) -> li
 def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
     """Check data needed to prepare and sign the selected agreement.
 
-    Requester-questionnaire completeness and streamlined eligibility are evaluated
+    Requester-questionnaire completeness and Standard MTA eligibility are evaluated
     separately. This function intentionally contains no eRPM or eligibility rules.
     """
 

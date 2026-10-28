@@ -26,7 +26,7 @@ cd /Users/joudtaher/Documents/AI_Clinic
 - Chemical materials → AUTM MTA for Chemical Materials
 - Devices → Simple Letter Agreement
 
-Mixed, unsupported, incomplete, or nonstandard requests route to the Standard MTA Process in eRPM.
+Requests meeting every applicable checklist criterion qualify for Standard MTA automatic approval. Mixed, unsupported, unresolved, or special-case requests require manual special-case review in eRPM.
 
 ## Structure
 
@@ -54,4 +54,4 @@ cd /Users/joudtaher/Documents/AI_Clinic
 
 ## Current boundary
 
-The app creates a populated agreement and a local signing manifest. After a standard request passes, use **Download final agreement for signing** to save the exact populated `.docx` that the signing adapter would receive. It does not upload to SignNow, send email, sign documents, or connect to eRPM. Structured answers and explicit free-text statements are compared with every applicable checklist rule using local spaCy sentence processing plus auditable phrase rules; ambiguous or conflicting text routes to eRPM. A trusted backend verification source can supplement institutionally verified facts. The relevant PI is assigned as the provider signer under the delegation stated in the supplied eligibility checklist.
+The app creates a populated agreement and a local signing manifest. After a Standard MTA request passes, use **Download final agreement for signing** to save the exact populated `.docx` that the signing adapter would receive. It does not upload to SignNow, send email, sign documents, or connect to eRPM. Structured answers and explicit free-text statements are compared with every applicable checklist rule using local spaCy sentence processing plus auditable phrase rules; ambiguous or conflicting text requires manual special-case review in eRPM. A trusted backend verification source can supplement institutionally verified facts. The relevant PI is assigned as the provider signer under the delegation stated in the supplied eligibility checklist.

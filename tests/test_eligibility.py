@@ -218,3 +218,18 @@ def test_no_third_party_materials_satisfies_device_ip_rule():
     result = evaluate_eligibility(request)
 
     assert "device_no_embedded_third_party_ip" in ids(result["passed_checks"])
+
+
+def test_eligible_request_is_identified_as_standard_automatic_mta():
+    result = evaluate_eligibility(plasmid_request())
+
+    assert "Standard MTA automatic approval" in result["explanation"]
+
+
+def test_nonqualifying_request_is_identified_as_manual_special_case():
+    request = plasmid_request()
+    request["erpm_intake"]["return_required"] = True
+
+    result = evaluate_eligibility(request)
+
+    assert "Manual special-case MTA review" in result["explanation"]

@@ -371,11 +371,16 @@ if submitted:
         )
 
     if eligibility["status"] == "eligible":
-        st.success("Eligible for automatic approval under the supplied checklist.")
+        st.success("Eligible for Standard MTA automatic approval under the checklist.")
     elif eligibility["status"] == "ineligible":
-        st.error("Not eligible for automatic approval; route to the Standard MTA Process.")
+        st.error(
+            "Not eligible for Standard MTA automatic approval; "
+            "manual special-case review is required."
+        )
     else:
-        st.warning("Eligibility is unresolved; route to the Standard MTA Process.")
+        st.warning(
+            "Eligibility is unresolved; manual special-case review is required."
+        )
     st.write(eligibility["explanation"])
 
     result_left, result_right = st.columns(2)
@@ -435,8 +440,8 @@ if submitted:
         st.warning("Complete the requester questionnaire and process it again.")
     elif pipeline_result.status == "agreement_incomplete":
         st.warning("Complete the agreement and signing information and process it again.")
-    elif pipeline_result.status == "routed_to_erpm":
-        st.warning("This request must continue through the Standard MTA Process in eRPM.")
+    elif pipeline_result.status == "manual_special_case_review":
+        st.warning("This request requires manual special-case MTA review in eRPM.")
     else:
         st.error("Automatic processing stopped: " + "; ".join(pipeline_result.reasons))
 

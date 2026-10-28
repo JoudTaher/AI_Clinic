@@ -92,9 +92,9 @@ class OutgoingMTAPipeline:
         if selection["status"] != "template_selected":
             return PipelineResult(
                 submission_id=submission_id,
-                status="routed_to_erpm",
+                status="manual_special_case_review",
                 reasons=tuple(selection["review_reasons"]),
-                audit_events=audit + ("routed_to_erpm",),
+                audit_events=audit + ("manual_special_case_review",),
             )
 
         agreement_readiness = evaluate_agreement_readiness(request)
@@ -113,14 +113,14 @@ class OutgoingMTAPipeline:
         if agreement_readiness["status"] != "ready":
             return PipelineResult(
                 submission_id=submission_id,
-                status="routed_to_erpm",
+                status="manual_special_case_review",
                 selected_template=selected_template,
                 reasons=tuple(agreement_readiness["review_reasons"]),
                 audit_events=audit
                 + (
                     "agreement_information_checked",
                     "agreement_terms_need_review",
-                    "routed_to_erpm",
+                    "manual_special_case_review",
                 ),
             )
 

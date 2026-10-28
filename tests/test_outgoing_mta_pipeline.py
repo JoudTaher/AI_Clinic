@@ -63,13 +63,13 @@ def pipeline_with_recorders():
     )
 
 
-def test_mixed_material_request_routes_to_erpm_before_rendering():
+def test_mixed_material_request_requires_manual_review_before_rendering():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("biological", "chemical")
 
     result = pipeline.run(request)
 
-    assert result.status == "routed_to_erpm"
+    assert result.status == "manual_special_case_review"
     assert renderer.calls == 0
     assert sender.calls == 0
 
@@ -102,14 +102,14 @@ def test_missing_agreement_information_stops_after_template_selection():
     assert sender.calls == 0
 
 
-def test_nonstandard_agreement_terms_route_to_erpm_before_rendering():
+def test_special_case_agreement_terms_require_manual_review_before_rendering():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("chemical")
     request["agreement_information"]["material_provided_at_no_cost"] = False
 
     result = pipeline.run(request)
 
-    assert result.status == "routed_to_erpm"
+    assert result.status == "manual_special_case_review"
     assert result.selected_template == "autm_chemical"
     assert "Provider material is not supplied at no cost." in result.reasons
     assert "agreement_terms_need_review" in result.audit_events
@@ -126,7 +126,7 @@ def test_contradictory_device_language_routes_before_rendering():
 
     result = pipeline.run(request)
 
-    assert result.status == "routed_to_erpm"
+    assert result.status == "manual_special_case_review"
     assert renderer.calls == 0
     assert sender.calls == 0
 
@@ -141,7 +141,7 @@ def test_third_party_license_language_routes_before_rendering():
 
     result = pipeline.run(request)
 
-    assert result.status == "routed_to_erpm"
+    assert result.status == "manual_special_case_review"
     assert renderer.calls == 0
     assert sender.calls == 0
 
@@ -232,12 +232,12 @@ def test_mixed_questionnaire_cannot_be_disguised_as_one_category():
 
     result = pipeline.run(request)
 
-    assert result.status == "routed_to_erpm"
+    assert result.status == "manual_special_case_review"
     assert renderer.calls == 0
     assert sender.calls == 0
 
 
-def test_ambiguous_other_model_organism_routes_to_erpm():
+def test_ambiguous_other_model_organism_requires_manual_review():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("biological")
     request["erpm_intake"]["material_types"] = [
@@ -246,7 +246,7 @@ def test_ambiguous_other_model_organism_routes_to_erpm():
 
     result = pipeline.run(request)
 
-    assert result.status == "routed_to_erpm"
+    assert result.status == "manual_special_case_review"
     assert renderer.calls == 0
     assert sender.calls == 0
 

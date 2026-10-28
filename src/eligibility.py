@@ -408,19 +408,20 @@ def evaluate_eligibility(
     if failed_checks:
         status = "ineligible"
         explanation = (
-            "Not eligible for the Streamlined Template Process because one or more "
+            "Manual special-case MTA review is required because one or more "
             "applicable checklist conditions were not satisfied."
         )
     elif missing_information:
         status = "needs_review"
         explanation = (
-            "The Standard MTA Process is required because one or more applicable "
-            "checklist answers or material-category details are missing or outside scope."
+            "Manual special-case MTA review is required because one or more "
+            "applicable checklist answers or material-category details are missing "
+            "or outside scope."
         )
     else:
         status = "eligible"
         explanation = (
-            "Eligible for the Streamlined Template Process because every condition "
+            "Eligible for Standard MTA automatic approval because every condition "
             "in each applicable checklist section was satisfied."
         )
 

@@ -21,7 +21,7 @@ DELIVERY_POLICY = {
     "internal_approval_required": False,
     "delivery_mode": "signnow_package",
     "live_delivery_enabled": False,
-    "nonstandard_route": "eRPM",
+    "manual_special_case_route": "eRPM",
 }
 
 

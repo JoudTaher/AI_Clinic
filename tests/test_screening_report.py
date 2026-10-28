@@ -28,10 +28,10 @@ def test_report_contains_separate_decisions():
         "internal_approval_required": False,
         "delivery_mode": "signnow_package",
         "live_delivery_enabled": False,
-        "nonstandard_route": "eRPM",
+        "manual_special_case_route": "eRPM",
     }
     assert report["eligibility"]["status"] == "needs_review"
-    assert report["template_selection"]["status"] == "not_applicable"
+    assert report["template_selection"]["status"] == "manual_special_case_review"
     assert report["template_selection"]["selected_template"] is None
 
 

@@ -41,14 +41,17 @@ def select_template(
     definitions = tuple(catalog or load_template_catalog())
     if eligibility_result.get("status") != "eligible":
         return _base_result(
-            "not_applicable",
+            "manual_special_case_review",
             [],
-            ["Template review begins only after streamlined eligibility is established."],
+            [
+                "Automatic template selection begins only after Standard MTA "
+                "eligibility is established."
+            ],
         )
 
     if not valid_material_type_selection(raw_material_types):
         return _base_result(
-            "route_to_erpm",
+            "manual_special_case_review",
             [],
             ["Material types must be a non-empty list of approved questionnaire values."],
         )
@@ -58,7 +61,7 @@ def select_template(
         isinstance(value, str) and value.strip() for value in raw_categories
     ):
         return _base_result(
-            "route_to_erpm",
+            "manual_special_case_review",
             [],
             ["Material categories must be a list of non-empty strings."],
         )
@@ -74,9 +77,9 @@ def select_template(
         reason = (
             "A material category is required for template matching."
             if not categories
-            else "Mixed material categories require manual template review."
+            else "Mixed material categories require manual special-case review."
         )
-        return _base_result("route_to_erpm", relevant, [reason])
+        return _base_result("manual_special_case_review", relevant, [reason])
 
     if len(relevant) == 1:
         selected = relevant[0].template_id
@@ -88,12 +91,18 @@ def select_template(
         )
 
     reasons = (
-        ["No automation-enabled template matches this request; route to eRPM."]
+        [
+            "No automation-enabled template matches this request; manual "
+            "special-case review in eRPM is required."
+        ]
         if not relevant
-        else ["More than one automation-enabled template matches; route to eRPM."]
+        else [
+            "More than one automation-enabled template matches; manual "
+            "special-case review in eRPM is required."
+        ]
     )
     return _base_result(
-        "route_to_erpm",
+        "manual_special_case_review",
         relevant,
         reasons,
     )

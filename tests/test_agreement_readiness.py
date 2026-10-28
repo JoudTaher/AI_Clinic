@@ -127,7 +127,7 @@ def test_checklist_required_shipping_and_no_cost_answers_are_required():
     assert "recipient_pays_shipping" in result["missing_fields"]
 
 
-def test_nonstandard_cost_term_routes_for_review():
+def test_special_case_cost_term_requires_manual_review():
     request = plasmid_request()
     request["agreement_information"]["material_provided_at_no_cost"] = False
 

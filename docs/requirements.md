@@ -16,13 +16,13 @@ The checklist is never displayed as requester input. The backend derives each ch
 
 Every request evaluates checklist Section A. Chemical, biological, device, and animal-material requests also evaluate Sections B, C, D, and E respectively.
 
-- Every applicable statement is true: eligible for automatic approval.
-- Any applicable statement is false: route to the Standard MTA Process.
-- Any statement is unanswered or the material category is unsupported or ambiguous: route to the Standard MTA Process.
+- Every applicable statement is true: eligible for Standard MTA automatic approval.
+- Any applicable statement is false: require manual special-case MTA review.
+- Any statement is unanswered or the material category is unsupported or ambiguous: require manual special-case MTA review.
 
 The checklist refers to Sections B through F, but the supplied checklist contains no Section F.
 
-The text analyzer uses the free, MIT-licensed spaCy library for local English sentence segmentation, then applies auditable checklist-specific phrase and negation rules. Explicit disqualifying language fails a rule; explicit qualifying language may pass it; ambiguous language remains unresolved and routes to eRPM. Every text decision records the matched phrase and source field in the screening report. It does not use a generative model, send text to a network service, or infer unstated facts.
+The text analyzer uses the free, MIT-licensed spaCy library for local English sentence segmentation, then applies auditable checklist-specific phrase and negation rules. Explicit disqualifying language fails a rule; explicit qualifying language may pass it; ambiguous language remains unresolved and requires manual special-case review in eRPM. Every text decision records the matched phrase and source field in the screening report. It does not use a generative model, send text to a network service, or infer unstated facts.
 
 Structured proxies are limited to the checklist comparison documented by the supplied sources: recipient organization type plus domestic-transfer answer, third-party-material answer, invention/licensing answer, funding answer, human-material/data answers, export-control answer, return answer, and category-specific safety answers. A negative or unresolved signal is never converted to a pass by text.
 
@@ -53,7 +53,7 @@ Agreement fields are conditional on the selected template:
 
 Provider and recipient names, organization, and transmittal fee are reused from the requester questionnaire. Research purpose and duration remain generation context unless the selected standard template has an approved population slot; the system does not silently activate optional legal terms. The checklist-sourced shipping-payment and no-cost answers are required agreement-term validations; a conflicting answer routes for review. Signing emails are delivery data and are not printed into the agreement.
 
-The combined “Other Model Organism (yeast, drosophila, zebrafish)” questionnaire option is routed to eRPM because it does not identify one unambiguous checklist section.
+The combined “Other Model Organism (yeast, drosophila, zebrafish)” questionnaire option requires manual special-case review in eRPM because it does not identify one unambiguous checklist section.
 
 ## Pipeline
 
