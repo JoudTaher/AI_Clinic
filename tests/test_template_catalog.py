@@ -22,7 +22,7 @@ def test_default_catalog_contains_every_supplied_agreement():
     assert automated == {
         "autm_chemical": True,
         "autm_biological": True,
-        "simple_letter_agreement": False,
+        "simple_letter_agreement": True,
         "ubmta_implementing_letter": True,
     }
 

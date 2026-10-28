@@ -7,6 +7,7 @@ from typing import Any
 
 from src.agreement_readiness import evaluate_agreement_readiness
 from src.eligibility import evaluate_eligibility
+from src.intake import evaluate_intake_readiness
 from src.pipeline.models import PipelineResult
 from src.pipeline.ports import (
     AgreementRenderError,
@@ -15,6 +16,7 @@ from src.pipeline.ports import (
     DeliveryError,
     PipelineStore,
 )
+from src.request_normalization import normalize_request
 from src.templates.catalog import TemplateDefinition, load_template_catalog
 from src.templates.selector import select_template
 
@@ -23,11 +25,11 @@ class InMemoryPipelineStore:
     def __init__(self) -> None:
         self._results: dict[str, PipelineResult] = {}
 
-    def get(self, request_id: str) -> PipelineResult | None:
-        return self._results.get(request_id)
+    def get(self, submission_id: str) -> PipelineResult | None:
+        return self._results.get(submission_id)
 
     def save(self, result: PipelineResult) -> None:
-        self._results[result.request_id] = result
+        self._results[result.submission_id] = result
 
 
 class OutgoingMTAPipeline:
@@ -45,16 +47,9 @@ class OutgoingMTAPipeline:
 
     def run(
         self,
-        request_id: str,
         request: Mapping[str, Any],
     ) -> PipelineResult:
-        if not isinstance(request_id, str) or not request_id.strip():
-            return PipelineResult(
-                request_id=request_id if isinstance(request_id, str) else "",
-                status="invalid_request",
-                reasons=("request_id",),
-                audit_events=("request_rejected",),
-            )
+        request = normalize_request(request)
         serialized_request = json.dumps(
             request,
             ensure_ascii=False,
@@ -65,40 +60,18 @@ class OutgoingMTAPipeline:
         request_fingerprint = hashlib.sha256(
             serialized_request.encode("utf-8")
         ).hexdigest()
-        existing = self.store.get(request_id)
+        submission_id = f"mta-{request_fingerprint}"
+        existing = self.store.get(submission_id)
         if existing is not None:
-            if existing.request_fingerprint == request_fingerprint:
-                return existing
-            return PipelineResult(
-                request_id=request_id,
-                status="idempotency_conflict",
-                request_fingerprint=request_fingerprint,
-                reasons=(
-                    "This request ID was already completed with different request data.",
-                ),
-                audit_events=("idempotency_conflict",),
-            )
+            return existing
 
-        readiness = evaluate_agreement_readiness(request)
-        if readiness["status"] == "missing_information":
+        intake_readiness = evaluate_intake_readiness(request)
+        if intake_readiness["status"] == "missing_information":
             return PipelineResult(
-                request_id=request_id,
+                submission_id=submission_id,
                 status="intake_incomplete",
-                reasons=tuple(readiness["missing_fields"]),
+                reasons=tuple(intake_readiness["missing_fields"]),
                 audit_events=("intake_checked",),
-            )
-        if readiness["status"] != "ready":
-            review_reasons = tuple(
-                reason.get("field_id", str(reason))
-                if isinstance(reason, Mapping)
-                else str(reason)
-                for reason in readiness["review_reasons"]
-            )
-            return PipelineResult(
-                request_id=request_id,
-                status="routed_to_erpm",
-                reasons=review_reasons,
-                audit_events=("intake_checked", "agreement_review_required"),
             )
 
         eligibility = evaluate_eligibility(request)
@@ -108,10 +81,20 @@ class OutgoingMTAPipeline:
 
         if selection["status"] != "template_selected":
             return PipelineResult(
-                request_id=request_id,
+                submission_id=submission_id,
                 status="routed_to_erpm",
                 reasons=tuple(selection["review_reasons"]),
                 audit_events=audit + ("routed_to_erpm",),
+            )
+
+        agreement_readiness = evaluate_agreement_readiness(request)
+        if agreement_readiness["status"] == "missing_information":
+            return PipelineResult(
+                submission_id=submission_id,
+                status="agreement_incomplete",
+                selected_template=selected_template,
+                reasons=tuple(agreement_readiness["missing_fields"]),
+                audit_events=audit + ("agreement_information_checked",),
             )
 
         template = next(
@@ -121,37 +104,34 @@ class OutgoingMTAPipeline:
         )
         approved_audit = audit + ("auto_approved:standard_rules",)
         try:
-            artifact = self.renderer.render(request_id, template, request)
+            artifact = self.renderer.render(submission_id, template, request)
         except AgreementRenderError as error:
             return PipelineResult(
-                request_id=request_id,
+                submission_id=submission_id,
                 status="generation_failed",
                 selected_template=selected_template,
-                request_fingerprint=request_fingerprint,
                 reasons=(str(error),),
                 audit_events=approved_audit + ("agreement_generation_failed",),
             )
         try:
-            receipt = self.sender.send(request_id, request, artifact)
+            receipt = self.sender.send(submission_id, request, artifact)
         except DeliveryError as error:
             return PipelineResult(
-                request_id=request_id,
+                submission_id=submission_id,
                 status="delivery_failed",
                 selected_template=selected_template,
                 artifact_path=str(artifact.path),
-                request_fingerprint=request_fingerprint,
                 reasons=(str(error),),
                 audit_events=approved_audit
                 + ("agreement_rendered", "delivery_failed"),
             )
         result = PipelineResult(
-            request_id=request_id,
+            submission_id=submission_id,
             status=receipt.status,
             selected_template=selected_template,
             artifact_path=str(artifact.path),
             delivery_reference=receipt.reference,
             delivery_mode=receipt.mode,
-            request_fingerprint=request_fingerprint,
             audit_events=approved_audit
             + ("agreement_rendered", "signing_package_prepared"),
         )

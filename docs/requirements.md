@@ -1,37 +1,44 @@
 # Outgoing MTA Proof of Concept Requirements
 
-## Eligibility
+## Source boundaries
 
-All requests evaluate Section A. Chemical, biological, device, and animal-derived selections additionally evaluate Sections B, C, D, and E respectively. Multiple selections evaluate every applicable section.
+The supplied eRPM PDF defines requester questionnaire fields. The supplied eligibility checklist alone defines whether a request qualifies for automatic approval. The supplied agreement templates define agreement population and signature fields. Data from one layer must not be presented as if it came from another.
 
-- Every applicable answer is confirmed true: `eligible`.
-- Any applicable answer is false: `ineligible` for the Streamlined Template Process.
-- An answer is missing, the category is missing, or the request is outside documented scope: `needs_review`.
+## Requester questionnaire
 
-The checklist refers to Sections B through F, but no Section F is present.
+The questionnaire follows the source form's Introduction, Personnel, Material Details, Material Safety, and Outgoing Material Details sections. The eRPM-only “copy an existing UFA record” action is omitted because this standalone app has no eRPM record source. There is no requester-entered request identifier.
 
-## eRPM-Aligned Intake
+Missing questionnaire information is reported separately and does not alter checklist rules.
 
-The form follows the submitted worksheet's Introduction, Personnel, Material Details, Material Safety, and Outgoing Material Details sections. It includes the worksheet's material-type choices, recipient contacts, safety and export questions, experimental plan, relevant details, document upload, and sponsor field. Missing intake information is reported separately and never changes checklist eligibility.
+## Automatic approval
 
-## Template Selection
+Every request evaluates checklist Section A. Chemical, biological, device, and animal-material requests also evaluate Sections B, C, D, and E respectively.
 
-Template definitions live in a validated JSON catalog. Adding a template must not require selector-code changes.
+- Every applicable statement is true: eligible for automatic approval.
+- Any applicable statement is false: route to the Standard MTA Process.
+- Any statement is unanswered or the material category is unsupported or ambiguous: route to the Standard MTA Process.
 
-- A single eligible chemical request selects AUTM Chemical.
-- A single eligible biological request selects the UBMTA Implementing Letter.
-- A single eligible non-living animal-derived request selects AUTM Biological.
-- Device, mixed, missing, unsupported, or failed-eligibility requests route to eRPM.
-- The Simple Letter Agreement is not selected until Innovation Partnerships confirms its rule.
+The checklist refers to Sections B through F, but the supplied checklist contains no Section F.
 
-No internal template-approval step exists on the documented standard path.
+## Agreement mapping
+
+- Animal materials → AUTM MTA for Biological Materials
+- Biological materials → UBMTA Implementing Letter
+- Chemical materials → AUTM MTA for Chemical Materials
+- Devices → Simple Letter Agreement
+
+Mixed material categories never select an agreement automatically. Standard legal terms are unchanged; each template has an explicit tested population strategy.
+
+The combined “Other Model Organism (yeast, drosophila, zebrafish)” questionnaire option is routed to eRPM because it does not identify one unambiguous checklist section.
 
 ## Pipeline
 
-The modular backend follows `intake -> completeness -> eligibility -> automatic selection -> DOCX population -> signing package`. A completed request ID is idempotent and cannot prepare a duplicate package within the pipeline store. Each supported agreement has an explicit slot map; standard legal text is not rewritten.
+The backend follows `questionnaire completeness -> checklist eligibility -> template selection -> agreement-data completeness -> DOCX population -> signing package`.
 
-The local package contains only the populated document reference and hash, request/template identifiers, audit events, and required signer roles, identities, and order. U-M institutional signer identity comes from `MTA_UM_SIGNER_NAME`, `MTA_UM_SIGNER_TITLE`, and `MTA_UM_SIGNER_EMAIL`. Missing or invalid signer data stops package preparation.
+The pipeline derives an internal deterministic submission identifier from the normalized submission. It is not a requester input and is not displayed as a form field. Identical submissions do not prepare duplicate packages within one pipeline store.
 
-## Scope
+The local signing manifest contains the populated document path and hash, internal submission and template identifiers, audit events, and required signer identities, roles, and order. The relevant PI is the provider signer under the delegation stated in the checklist. Missing or invalid signer data stops package preparation.
 
-This local application does not connect to eRPM or SignNow and makes no network request. It creates a SignNow-ready manifest for later adapter integration. Authentication, production persistence, live e-signature submission, and eRPM integration remain outside this version.
+## Current boundary
+
+The app does not connect to eRPM or SignNow and makes no network requests. Authentication, persistent production storage, live e-signature submission, and eRPM integration remain outside this proof of concept.

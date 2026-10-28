@@ -1,6 +1,5 @@
 # Reference Files
 
-These are byte-for-byte working copies of the five files supplied for the proof of concept. The SHA-256 hashes in `manifest.json` verify that the copies have not been changed.
+The checklist and four original agreement templates are byte-for-byte working copies of the files supplied for the proof of concept. The SHA-256 hashes in `manifest.json` verify the originals and the automation-compatible biological DOCX source used by the renderer.
 
-The biological AUTM file remains in its original `.doc` format. A test conversion preserved the contract text but changed legacy form fields and introduced a visible field error, so the converted copy is not used here.
-
+The AUTM biological source is a legacy `.doc`. Its `.docx` conversion preserves the contract text and is used only as the automation-compatible population source. The renderer clears the conversion's legacy form-field artifacts before producing an agreement.

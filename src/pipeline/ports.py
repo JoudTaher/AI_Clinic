@@ -18,7 +18,7 @@ class AgreementRenderError(ValueError):
 class AgreementRenderer(Protocol):
     def render(
         self,
-        request_id: str,
+        submission_id: str,
         template: TemplateDefinition,
         request: Mapping[str, Any],
     ) -> RenderedAgreement: ...
@@ -27,13 +27,13 @@ class AgreementRenderer(Protocol):
 class AgreementSender(Protocol):
     def send(
         self,
-        request_id: str,
+        submission_id: str,
         request: Mapping[str, Any],
         artifact: RenderedAgreement,
     ) -> DeliveryReceipt: ...
 
 
 class PipelineStore(Protocol):
-    def get(self, request_id: str) -> PipelineResult | None: ...
+    def get(self, submission_id: str) -> PipelineResult | None: ...
 
     def save(self, result: PipelineResult) -> None: ...

@@ -6,7 +6,9 @@ from typing import Any
 
 from src.agreement_readiness import evaluate_agreement_readiness
 from src.eligibility import evaluate_eligibility
-from src.template_selector import evaluate_template_selection
+from src.intake import evaluate_intake_readiness
+from src.request_normalization import normalize_request
+from src.templates.selector import select_template
 
 
 DISCLAIMER = (
@@ -23,6 +25,7 @@ DELIVERY_POLICY = {
 
 
 def build_screening_report(request: Mapping[str, Any]) -> dict[str, Any]:
+    request = normalize_request(request)
     eligibility = evaluate_eligibility(request)
     raw_intake = request.get("erpm_intake", {})
     erpm_intake = dict(raw_intake) if isinstance(raw_intake, Mapping) else {}
@@ -31,9 +34,10 @@ def build_screening_report(request: Mapping[str, Any]) -> dict[str, Any]:
         "disclaimer": DISCLAIMER,
         "delivery_policy": dict(DELIVERY_POLICY),
         "erpm_intake": erpm_intake,
+        "intake_readiness": evaluate_intake_readiness(request),
         "eligibility": eligibility,
         "agreement_readiness": evaluate_agreement_readiness(request),
-        "template_selection": evaluate_template_selection(request, eligibility),
+        "template_selection": select_template(request, eligibility),
     }
 
 

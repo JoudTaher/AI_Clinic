@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from src.materials import valid_material_type_selection
+from src.request_normalization import normalize_request
 from src.templates.catalog import TemplateDefinition, load_template_catalog
 
 
@@ -31,12 +33,24 @@ def select_template(
     eligibility_result: Mapping[str, Any],
     catalog: Sequence[TemplateDefinition] | None = None,
 ) -> dict[str, Any]:
+    raw_intake = request.get("erpm_intake", {})
+    raw_material_types = (
+        raw_intake.get("material_types") if isinstance(raw_intake, Mapping) else None
+    )
+    request = normalize_request(request)
     definitions = tuple(catalog or load_template_catalog())
     if eligibility_result.get("status") != "eligible":
         return _base_result(
             "not_applicable",
             [],
             ["Template review begins only after streamlined eligibility is established."],
+        )
+
+    if not valid_material_type_selection(raw_material_types):
+        return _base_result(
+            "route_to_erpm",
+            [],
+            ["Material types must be a non-empty list of approved questionnaire values."],
         )
 
     raw_categories = request.get("material_categories", [])

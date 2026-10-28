@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -11,7 +12,10 @@ from typing import Any
 from src.adapters.paths import safe_identifier
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.ports import DeliveryError
-from src.signing.config import EMAIL_PATTERN, SigningConfiguration
+from src.request_normalization import normalize_request
+
+
+EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 class SignNowPackageSender:
@@ -19,9 +23,8 @@ class SignNowPackageSender:
 
     _AUTM_TEMPLATES = {"autm_chemical", "autm_biological"}
 
-    def __init__(self, output_dir: Path, configuration: SigningConfiguration) -> None:
+    def __init__(self, output_dir: Path) -> None:
         self.output_dir = output_dir
-        self.configuration = configuration
 
     @staticmethod
     def _required_text(data: Mapping[str, Any], field_id: str) -> str:
@@ -53,14 +56,11 @@ class SignNowPackageSender:
             "title": cls._required_text(data, f"{prefix}_title"),
         }
 
-    def _provider_official(self, role: str) -> dict[str, object]:
-        return {
-            "email": self.configuration.um_signer_email,
-            "name": self.configuration.um_signer_name,
-            "order": 2,
-            "roles": [role],
-            "title": self.configuration.um_signer_title,
-        }
+    @classmethod
+    def _provider_official(
+        cls, information: Mapping[str, Any], role: str
+    ) -> dict[str, object]:
+        return cls._person(information, "provider_scientist", [role], 2)
 
     def _signers(
         self, template_id: str, information: Mapping[str, Any]
@@ -73,7 +73,9 @@ class SignNowPackageSender:
                     ["recipient_authorized_signatory"],
                     1,
                 ),
-                self._provider_official("provider_authorized_signatory"),
+                self._provider_official(
+                    information, "provider_authorized_signatory"
+                ),
             ]
 
         if template_id == "ubmta_implementing_letter":
@@ -102,17 +104,38 @@ class SignNowPackageSender:
                         1,
                     )
                 )
-            signers.append(self._provider_official("provider_organization_certifier"))
+            signers.append(
+                self._provider_official(
+                    information, "provider_organization_certifier"
+                )
+            )
             return signers
+
+        if template_id == "simple_letter_agreement":
+            return [
+                self._person(
+                    information, "recipient_scientist", ["recipient_scientist"], 1
+                ),
+                self._person(
+                    information,
+                    "recipient_authorized_official",
+                    ["recipient_authorized_signatory"],
+                    1,
+                ),
+                self._provider_official(
+                    information, "provider_authorized_signatory"
+                ),
+            ]
 
         raise DeliveryError(f"Unsupported signing workflow: {template_id}")
 
     def send(
         self,
-        request_id: str,
+        submission_id: str,
         request: Mapping[str, Any],
         artifact: RenderedAgreement,
     ) -> DeliveryReceipt:
+        request = normalize_request(request)
         if not artifact.path.is_file():
             raise DeliveryError(f"Agreement artifact does not exist: {artifact.path}")
         raw_information = request.get("agreement_information", {})
@@ -133,14 +156,16 @@ class SignNowPackageSender:
             },
             "live_submission": False,
             "provider": "U-M SignNow",
-            "request_id": request_id,
+            "submission_id": submission_id,
             "schema_version": 1,
             "signers": signers,
             "template_id": artifact.template_id,
         }
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        destination = self.output_dir / f"{safe_identifier(request_id)}.signing.json"
+        destination = self.output_dir / (
+            f"{safe_identifier(submission_id)}.signing.json"
+        )
         descriptor, temporary_name = tempfile.mkstemp(
             dir=self.output_dir, prefix=".signing-", suffix=".json"
         )

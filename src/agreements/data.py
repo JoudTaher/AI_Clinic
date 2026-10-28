@@ -25,6 +25,9 @@ class AgreementData:
     recipient_address: str
     recipient_scientist_name: str
     recipient_scientist_title: str
+    recipient_authorized_official_name: str
+    recipient_authorized_official_title: str
+    recipient_scientist_can_certify_organization: bool
     material_description: str
     shipping_recipient_name: str
     shipping_address: str
@@ -42,9 +45,19 @@ class AgreementData:
                 raise AgreementDataError(f"Missing required agreement field: {field_id}")
             return value.strip()
 
+        def optional(field_id: str) -> str:
+            value = raw.get(field_id, "")
+            if not isinstance(value, str):
+                raise AgreementDataError(f"Agreement field must be text: {field_id}")
+            return value.strip()
+
         fee = raw.get("transmittal_fee", "")
         if not isinstance(fee, str):
             raise AgreementDataError("transmittal_fee must be text")
+
+        can_certify = raw.get("recipient_scientist_can_certify_organization")
+        if not isinstance(can_certify, bool):
+            can_certify = False
 
         return cls(
             provider_organization=PROVIDER_ORGANIZATION,
@@ -55,6 +68,13 @@ class AgreementData:
             recipient_address=required("recipient_institution_address"),
             recipient_scientist_name=required("recipient_scientist_name"),
             recipient_scientist_title=required("recipient_scientist_title"),
+            recipient_authorized_official_name=optional(
+                "recipient_authorized_official_name"
+            ),
+            recipient_authorized_official_title=optional(
+                "recipient_authorized_official_title"
+            ),
+            recipient_scientist_can_certify_organization=can_certify,
             material_description=required("material_description"),
             shipping_recipient_name=required("shipping_recipient_name"),
             shipping_address=required("shipping_address"),

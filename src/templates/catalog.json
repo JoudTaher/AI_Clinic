@@ -19,9 +19,9 @@
     "id": "simple_letter_agreement",
     "display_name": "Simple Letter Agreement",
     "source_file": "reference_files/Template_Simple Letter Agreement.docx",
-    "material_categories": ["biological"],
+    "material_categories": ["device"],
     "required_context": {},
-    "automation_enabled": false
+    "automation_enabled": true
   },
   {
     "id": "ubmta_implementing_letter",

@@ -5,7 +5,6 @@ import pytest
 from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.adapters.signnow_package_sender import SignNowPackageSender
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
-from src.signing.config import SigningConfiguration
 from tests.fixtures import request_for
 
 
@@ -15,6 +14,7 @@ from tests.fixtures import request_for
         ("chemical", "autm_chemical"),
         ("biological", "ubmta_implementing_letter"),
         ("animal_derived", "autm_biological"),
+        ("device", "simple_letter_agreement"),
     ],
 )
 def test_real_standard_workflow_creates_agreement_and_signing_package(
@@ -22,17 +22,10 @@ def test_real_standard_workflow_creates_agreement_and_signing_package(
 ):
     pipeline = OutgoingMTAPipeline(
         renderer=DocxAgreementRenderer(tmp_path / "agreements"),
-        sender=SignNowPackageSender(
-            tmp_path / "signing",
-            SigningConfiguration(
-                um_signer_name="Morgan Michigan",
-                um_signer_title="Authorized Official",
-                um_signer_email="morgan@umich.edu",
-            ),
-        ),
+        sender=SignNowPackageSender(tmp_path / "signing"),
     )
 
-    result = pipeline.run(f"SMOKE-{category}", request_for(category))
+    result = pipeline.run(request_for(category))
 
     assert result.status == "prepared_for_signature"
     assert result.selected_template == template_id

@@ -53,11 +53,48 @@ COMPLETE_AGREEMENT_INFORMATION = {
     "material_description": "Synthetic plasmid pExample",
     "recipient_research_purpose": "Non-commercial laboratory research",
     "requested_duration": "3 years",
-    "shipping_cost_payer": "recipient",
+    "recipient_pays_shipping": True,
     "material_provided_at_no_cost": True,
     "shipping_recipient_name": "Dr. Recipient",
     "shipping_address": "100 Research Way, Example, MI 48100",
-    "transmittal_fee": "$125.00",
+}
+
+COMPLETE_ERPM_INTAKE = {
+    "project_title": "Synthetic plasmid transfer",
+    "paying_for_material_as_product_or_service": False,
+    "duration_years": 3,
+    "duration_months": 0,
+    "duration_comments": "",
+    "contact_pi_name": "Dr. Provider",
+    "primary_research_administrator_name": "Example Administrator",
+    "measurable_personnel_effort": False,
+    "material_types": ["Plasmid/Vector (rDNA or SNA)"],
+    "radioactive": False,
+    "dangerous_to_handle_store_or_use": False,
+    "hazardous_chemical_capacity_constraint": False,
+    "project_administrative_home": "Example Department",
+    "will_deposit_in_repository": False,
+    "recipient_entity": "Example University",
+    "recipient_scientist_name": "Dr. Recipient",
+    "recipient_scientist_email": "recipient.scientist@example.org",
+    "recipient_administrative_contact_name": "",
+    "recipient_administrative_contact_email": "",
+    "recipient_administrative_contact_street_address": "",
+    "recipient_administrative_contact_telephone": "",
+    "recipient_administrative_contact_fax": "",
+    "leaving_country": False,
+    "export_controlled": False,
+    "reimbursement_cost_or_fee": "$125.00",
+    "recipient_experimental_plan": "Non-commercial laboratory research",
+    "return_required": False,
+    "previously_invention_report_or_licensed": False,
+    "innovation_partnerships_file_number": "",
+    "external_funding_supported_development": False,
+    "managed_affiliate_work": False,
+    "made_using_third_party_materials": False,
+    "clinical_health_data_shared": False,
+    "related_details": "",
+    "related_document_names": [],
 }
 
 
@@ -71,8 +108,30 @@ def request_for(*categories: str) -> dict:
         answers.update(DEVICE_ANSWERS)
     if "animal_derived" in categories:
         answers.update(ANIMAL_ANSWERS)
+    intake = deepcopy(COMPLETE_ERPM_INTAKE)
+    if categories == ("chemical",):
+        intake["material_types"] = ["Chemical compound"]
+    elif categories == ("animal_derived",):
+        intake["material_types"] = ["Mouse/Rat"]
+    elif categories == ("device",):
+        intake["material_types"] = ["Device"]
+    elif categories == ("other",):
+        intake["material_types"] = ["Other material"]
+    elif len(categories) > 1:
+        category_material = {
+            "biological": "Plasmid/Vector (rDNA or SNA)",
+            "chemical": "Chemical compound",
+            "device": "Device",
+            "animal_derived": "Mouse/Rat",
+            "other": "Other material",
+        }
+        intake["material_types"] = [
+            category_material[category]
+            for category in categories
+            if category in category_material
+        ]
     return {
-        "material_categories": list(categories),
+        "erpm_intake": intake,
         "eligibility_answers": answers,
         "agreement_information": deepcopy(COMPLETE_AGREEMENT_INFORMATION),
     }

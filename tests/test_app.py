@@ -16,21 +16,28 @@ def test_app_loads_erpm_aligned_intake_sections():
         "Material Safety",
         "Outgoing Material Details",
     ]
-    assert "Streamlined Eligibility Review" in headings
+    assert "Automatic Approval Eligibility Checklist" in headings
+    assert "Agreement and Signing Information" in headings
 
     labels = {
         element.label
         for group in (app.text_input, app.text_area, app.selectbox, app.multiselect)
         for element in group
     }
-    assert "Project title" in labels
-    assert "Material types" in labels
-    assert "Plasmid/Vector/DNA/RNA description" in labels
-    assert "Recipient entity" in labels
-    assert "Recipient scientist email" in labels
-    assert "Recipient scientist title" in labels
-    assert "Recipient authorized official email" in labels
-    assert "U-M provider scientist title" in labels
+    assert "Request ID" not in labels
+    assert "Copy data from an existing UFA record?" not in labels
+    assert "Project Title" in labels
+    assert "Material Type" in labels
+    assert "Material information" in labels
+    assert "Recipient Entity" in labels
+    assert "Recipient Scientist Email" in labels
+    assert "Contact PI phone" not in labels
+    assert "Contact PI email" not in labels
+    assert "Primary Research Administrator phone" not in labels
+    assert "Primary Research Administrator email" not in labels
+    assert "Sponsor name (if applicable)" not in labels
+    assert "Provider Scientist title" in labels
+    assert "Recipient Scientist title" in labels
     assert "Recipient's experimental plan for use of the material" in labels
     assert "Is the recipient a verified UBMTA signatory?" not in labels
     assert (
@@ -44,21 +51,48 @@ def test_material_types_match_the_erpm_form():
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     assert not app.exception
     material_types = next(
-        element for element in app.multiselect if element.label == "Material types"
+        element for element in app.multiselect if element.label == "Material Type"
     )
     assert material_types.options == [
         "Human derived materials (isolated tissue, samples, specimens, cells, etc.)",
         "Cells (other than those derived from human subjects or patients)",
-        "Plasmid/vector (DNA or RNA)",
+        "Plasmid/Vector (rDNA or SNA)",
         "Mouse/Rat",
-        "Other model organism (yeast, drosophila, zebrafish)",
-        "Custom antibody",
+        "Other Model Organism (yeast, drosophila, zebrafish)",
+        "Custom Antibody",
         "Protein",
         "Chemical compound",
         "Software/code",
         "Device",
         "Other material",
     ]
+
+
+def test_human_material_selection_shows_only_source_form_conditionals():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type"
+    )
+
+    material_types.select(
+        "Human derived materials (isolated tissue, samples, specimens, cells, etc.)"
+    )
+    app.run(timeout=10)
+
+    labels = {
+        element.label
+        for group in (app.text_input, app.text_area, app.selectbox)
+        for element in group
+    }
+    assert "Human derived tissue/samples description" in labels
+    assert "How are these materials classified?" in labels
+    assert "IRB study HUM number" in labels
+    assert (
+        "Protocol and informed-consent sections allowing transfer outside U-M"
+        in labels
+    )
+    assert "Material information" in labels
 
 
 def test_empty_submission_fails_closed_without_crashing():
@@ -69,4 +103,4 @@ def test_empty_submission_fails_closed_without_crashing():
     app.run(timeout=10)
 
     assert not app.exception
-    assert any("missing agreement information" in item.value.lower() for item in app.warning)
+    assert any("questionnaire is incomplete" in item.value.lower() for item in app.warning)

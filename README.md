@@ -1,63 +1,55 @@
 # Outgoing MTA Automation Proof of Concept
 
-A local Streamlit application that evaluates an outgoing MTA request, selects and fills the approved agreement, and creates a U-M SignNow-ready package. It does not make network requests.
+This local Streamlit app separates the outgoing MTA requester questionnaire from the automatic-approval checklist. A complete standard request is mapped to the correct supplied agreement, populated, and packaged for U-M SignNow. The app makes no network requests.
 
-## Run It
+## Run
 
-Open this folder in Finder:
+In Finder, open:
 
 ```text
 /Users/joudtaher/Documents/AI_Clinic
 ```
 
-Then double-click `run_app.command`. The application opens in your browser, normally at `http://localhost:8501`.
+Double-click `run_app.command`. The app normally opens at `http://localhost:8501`.
 
-If macOS blocks the launcher, Control-click `run_app.command`, choose **Open**, and confirm once.
-
-You can also launch it from Terminal:
+Or run:
 
 ```bash
 cd /Users/joudtaher/Documents/AI_Clinic
 ./run_app.command
 ```
 
-Before preparing a signing package, configure the U-M institutional signer in the same Terminal window:
+## Automatic template mapping
 
-```bash
-export MTA_UM_SIGNER_NAME="Approved signer name"
-export MTA_UM_SIGNER_TITLE="Approved signer title"
-export MTA_UM_SIGNER_EMAIL="approved.signer@umich.edu"
-./run_app.command
-```
+- Animal materials → AUTM MTA for Biological Materials
+- Biological materials → UBMTA Implementing Letter
+- Chemical materials → AUTM MTA for Chemical Materials
+- Devices → Simple Letter Agreement
 
-The signer values are deployment configuration, not questionnaire answers. If they are absent, the app still opens but blocks package preparation with a clear error.
+Mixed, unsupported, incomplete, or nonstandard requests route to the Standard MTA Process in eRPM.
 
-## Test It
-
-```bash
-cd /Users/joudtaher/Documents/AI_Clinic
-.venv/bin/python -m pytest -v
-```
-
-## Backend Structure
+## Structure
 
 ```text
-src/templates/   template catalog, validation, and matching rules
-src/agreements/  normalized agreement data
-src/pipeline/    eligibility, routing, idempotency, and workflow states
-src/signing/     deployment-owned signer configuration
-src/adapters/    DOCX population and local SignNow-package creation
+src/intake.py                 requester-questionnaire completeness
+src/eligibility.py            automatic-approval checklist rules
+src/agreement_readiness.py    agreement and signing data completeness
+src/templates/                template catalog and deterministic mapping
+src/agreements/               normalized agreement data
+src/pipeline/                 workflow states and audit events
+src/adapters/                 DOCX population and SignNow package creation
+reference_files/              unchanged supplied checklist and templates
 ```
 
-Automatic mapping is fixed to the confirmed rules:
+Generated agreements and signing manifests are written under `outputs/`.
 
-- Chemical → AUTM Chemical
-- Biological → UBMTA Implementing Letter
-- Non-living animal-derived → AUTM Biological
-- Device, mixed, unsupported, or nonstandard → eRPM
+## Test
 
-The Simple Letter remains in the catalog but is disabled until its institutional rule is confirmed. Generated DOCX files and signing manifests are written under `outputs/`.
+```bash
+cd /Users/joudtaher/Documents/AI_Clinic
+.venv/bin/python -m pytest -q
+```
 
-## Current Boundary
+## Current boundary
 
-This version fills agreements and creates local signing manifests. It does not upload to SignNow, send email, sign documents, or connect to eRPM. A future authenticated U-M SignNow adapter can replace the local package adapter without changing the eligibility, selection, or rendering code.
+The app creates a populated agreement and a local signing manifest. It does not upload to SignNow, send email, sign documents, or connect to eRPM. The relevant PI is assigned as the provider signer under the delegation stated in the supplied eligibility checklist.

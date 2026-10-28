@@ -14,6 +14,7 @@ from src.adapters.paths import safe_identifier
 from src.agreements.data import AgreementData
 from src.pipeline.models import RenderedAgreement
 from src.pipeline.ports import AgreementRenderError
+from src.request_normalization import normalize_request
 from src.templates.catalog import TemplateDefinition
 
 
@@ -61,7 +62,9 @@ def _replace_paragraph_text(paragraph: etree._Element, value: str) -> None:
         _set_text_node(node, "")
 
 
-def _set_cell_text(cell: etree._Element, value: str) -> None:
+def _set_cell_text(
+    cell: etree._Element, value: str, *, preserve_run_formatting: bool = True
+) -> None:
     original_paragraph = next(iter(cell.xpath("./w:p", namespaces=NS)), None)
     paragraph_properties = None
     run_properties = None
@@ -73,7 +76,11 @@ def _set_cell_text(cell: etree._Element, value: str) -> None:
         )
         if existing_run is not None:
             existing_rpr = existing_run.find(_word("rPr"))
-            run_properties = deepcopy(existing_rpr) if existing_rpr is not None else None
+            run_properties = (
+                deepcopy(existing_rpr)
+                if preserve_run_formatting and existing_rpr is not None
+                else None
+            )
 
     for child in list(cell):
         if child.tag != _word("tcPr"):
@@ -85,6 +92,12 @@ def _set_cell_text(cell: etree._Element, value: str) -> None:
     run = etree.SubElement(paragraph, _word("r"))
     if run_properties is not None:
         run.append(run_properties)
+    elif not preserve_run_formatting:
+        run_properties = etree.SubElement(run, _word("rPr"))
+        size = etree.SubElement(run_properties, _word("sz"))
+        size.set(_word("val"), "22")
+        complex_size = etree.SubElement(run_properties, _word("szCs"))
+        complex_size.set(_word("val"), "22")
     parts = value.split("\n")
     for index, part in enumerate(parts):
         if index:
@@ -101,11 +114,14 @@ class DocxAgreementRenderer:
 
     def render(
         self,
-        request_id: str,
+        submission_id: str,
         template: TemplateDefinition,
         request: Mapping[str, Any],
     ) -> RenderedAgreement:
-        supported = self._AUTM_IDS | {"ubmta_implementing_letter"}
+        supported = self._AUTM_IDS | {
+            "ubmta_implementing_letter",
+            "simple_letter_agreement",
+        }
         if not template.automation_enabled or template.template_id not in supported:
             raise UnsupportedTemplateError(
                 f"No automatic population strategy for {template.template_id}"
@@ -115,20 +131,24 @@ class DocxAgreementRenderer:
                 f"Automatic population requires DOCX: {template.template_id}"
             )
 
+        request = normalize_request(request)
         data = AgreementData.from_request(request)
         with ZipFile(template.source_path) as source:
             root = etree.fromstring(source.read("word/document.xml"))
             if template.template_id in self._AUTM_IDS:
                 self._populate_autm(root, data)
-            else:
+            elif template.template_id == "ubmta_implementing_letter":
                 self._populate_ubmta(root, data)
+            else:
+                self._populate_simple_letter(root, data)
             populated_xml = etree.tostring(
                 root, xml_declaration=True, encoding="UTF-8", standalone=True
             )
 
             self.output_dir.mkdir(parents=True, exist_ok=True)
             destination = self.output_dir / (
-                f"{safe_identifier(request_id)}-{safe_identifier(template.template_id)}.docx"
+                f"{safe_identifier(submission_id)}-"
+                f"{safe_identifier(template.template_id)}.docx"
             )
             descriptor, temporary_name = tempfile.mkstemp(
                 dir=self.output_dir, prefix=".agreement-", suffix=".docx"
@@ -237,6 +257,28 @@ class DocxAgreementRenderer:
         )
 
     @classmethod
+    def _line_after_heading_containing(
+        cls, root: etree._Element, heading: str, marker: str
+    ) -> etree._Element:
+        paragraphs = cls._paragraphs(root)
+        heading_index = next(
+            (
+                index
+                for index, paragraph in enumerate(paragraphs)
+                if _text(paragraph).strip() == heading
+            ),
+            None,
+        )
+        if heading_index is None:
+            raise UnsupportedTemplateError(f"Expected template heading is missing: {heading}")
+        for paragraph in paragraphs[heading_index + 1 :]:
+            if marker in _text(paragraph):
+                return paragraph
+        raise UnsupportedTemplateError(
+            f"Expected {marker} line after template heading {heading}"
+        )
+
+    @classmethod
     def _populate_ubmta(cls, root: etree._Element, data: AgreementData) -> None:
         recipient_org = cls._nth_starting(root, "Organization:", 1)
         _replace_paragraph_text(
@@ -285,3 +327,126 @@ class DocxAgreementRenderer:
         _replace_paragraph_text(
             recipient_title, f"   Title:\t\t{data.recipient_scientist_title}"
         )
+
+        provider_cert_name = cls._line_after_heading(
+            root, "PROVIDER ORGANIZATION CERTIFICATION", "Name:"
+        )
+        _replace_paragraph_text(
+            provider_cert_name, f"Name:\t\t{data.provider_scientist_name}"
+        )
+        provider_cert_title = cls._line_after_heading(
+            root, "PROVIDER ORGANIZATION CERTIFICATION", "Title:"
+        )
+        _replace_paragraph_text(
+            provider_cert_title, f"   Title:\t\t{data.provider_scientist_title}"
+        )
+        provider_cert_address = cls._line_after_heading(
+            root, "PROVIDER ORGANIZATION CERTIFICATION", "Address:"
+        )
+        _replace_paragraph_text(
+            provider_cert_address, f"  Address:\t{data.provider_address}"
+        )
+
+        recipient_certifier_name = (
+            data.recipient_scientist_name
+            if data.recipient_scientist_can_certify_organization
+            else data.recipient_authorized_official_name
+        )
+        recipient_certifier_title = (
+            data.recipient_scientist_title
+            if data.recipient_scientist_can_certify_organization
+            else data.recipient_authorized_official_title
+        )
+        recipient_certifier = cls._line_after_heading_containing(
+            root, "RECIPIENT ORGANIZATION CERTIFICATION", "Authorized"
+        )
+        leftover_official_label = cls._line_after_heading(
+            root, "RECIPIENT ORGANIZATION CERTIFICATION", "Official:"
+        )
+        _replace_paragraph_text(
+            recipient_certifier, f"   Authorized Official:\t{recipient_certifier_name}"
+        )
+        _replace_paragraph_text(leftover_official_label, "")
+        recipient_certifier_title_line = cls._line_after_heading(
+            root, "RECIPIENT ORGANIZATION CERTIFICATION", "Title:"
+        )
+        _replace_paragraph_text(
+            recipient_certifier_title_line,
+            f"   Title:\t\t{recipient_certifier_title}",
+        )
+        recipient_certifier_address = cls._line_after_heading(
+            root, "RECIPIENT ORGANIZATION CERTIFICATION", "Address:"
+        )
+        _replace_paragraph_text(
+            recipient_certifier_address, f"  Address:\t{data.recipient_address}"
+        )
+
+    @classmethod
+    def _populate_simple_letter(
+        cls, root: etree._Element, data: AgreementData
+    ) -> None:
+        paragraphs = cls._paragraphs(root)
+        material = next(
+            (paragraph for paragraph in paragraphs if "[insert description]" in _text(paragraph)),
+            None,
+        )
+        if material is None:
+            raise UnsupportedTemplateError(
+                "Expected Simple Letter material marker is missing"
+            )
+        _replace_marker(material, "[insert description]", data.material_description)
+
+        fee = next(
+            (paragraph for paragraph in paragraphs if "[insert fee here]" in _text(paragraph)),
+            None,
+        )
+        if fee is None:
+            raise UnsupportedTemplateError("Expected Simple Letter fee marker is missing")
+        _replace_marker(fee, "[insert fee here]", data.transmittal_fee)
+
+        tables = root.xpath(".//w:tbl", namespaces=NS)
+        try:
+            _set_cell_text(
+                cls._cell(tables, 0, 0, 1),
+                data.provider_scientist_name,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 0, 4, 1),
+                data.provider_scientist_name,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 0, 5, 1),
+                data.provider_scientist_title,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 1, 0, 1),
+                data.recipient_scientist_name,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 1, 1, 1),
+                data.recipient_organization,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 1, 2, 1),
+                data.recipient_address,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 1, 4, 1),
+                data.recipient_authorized_official_name,
+                preserve_run_formatting=False,
+            )
+            _set_cell_text(
+                cls._cell(tables, 1, 5, 1),
+                data.recipient_authorized_official_title,
+                preserve_run_formatting=False,
+            )
+        except IndexError as error:
+            raise UnsupportedTemplateError(
+                "The Simple Letter template structure does not match the approved slot map"
+            ) from error

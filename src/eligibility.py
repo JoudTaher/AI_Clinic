@@ -4,13 +4,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from src.models import Criterion
+from src.request_normalization import normalize_request
 
 
 SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
     "A": (
         Criterion(
             "recipient_is_us_nonprofit",
-            "Material is being sent from UM to a U.S. non-profit institution",
+            "Material is being sent from UM to a U.S. non-profit institution (e.g., university, college, non-profit, or research organization)",
             "A",
         ),
         Criterion(
@@ -20,17 +21,17 @@ SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
         ),
         Criterion(
             "internal_noncommercial_research_only",
-            "Use is limited to internal, non-commercial research",
+            "Use is limited to internal, non-commercial research (e.g., the research is not intended to inform a product, service, or company decision)",
             "A",
         ),
         Criterion(
             "not_invention_report_patented_or_encumbered",
-            "Material is not appropriately the subject of an invention report and is not patented or otherwise encumbered",
+            "The materials are not appropriately the subject of an invention report with Innovation Partnerships, whether or not yet filed, and are not patented or otherwise encumbered",
             "A",
         ),
         Criterion(
             "no_funding_restrictions",
-            "No funding restrictions affect the transfer",
+            "No funding restrictions affect the transfer (e.g., a funding agreement did not pay for generation of the materials and include terms that follow the material)",
             "A",
         ),
         Criterion(
@@ -40,7 +41,7 @@ SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
         ),
         Criterion(
             "not_controlled_beyond_ear99",
-            "Material is not a controlled substance beyond EAR99",
+            "Material is not a controlled substance beyond EAR99 (e.g., DEA-regulated)",
             "A",
         ),
         Criterion(
@@ -69,7 +70,7 @@ SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
         ),
         Criterion(
             "biological_material_definition_met",
-            "Materials consist of living organisms or contain biological molecules as described in the checklist",
+            "Materials consist of living organisms or contain biological molecules, such as cell lines, bacteria, fungi, viruses, and plasmids/vectors (rDNA or synthetic nucleic acids)",
             "C",
         ),
         Criterion(
@@ -108,7 +109,7 @@ SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
         ),
         Criterion(
             "animal_nonliving_derivative_definition_met",
-            "Materials consist of non-living animal derivatives as described in the checklist",
+            "Materials consist of non-living animal derivatives, such as mouse cell lines, animal tissues or organs, fixed samples, or derivatives",
             "E",
         ),
     ),
@@ -131,6 +132,7 @@ def _scope_issue(message: str) -> dict[str, str]:
 
 
 def evaluate_eligibility(request: Mapping[str, Any]) -> dict[str, Any]:
+    request = normalize_request(request)
     raw_categories = request.get("material_categories", [])
     categories = raw_categories if isinstance(raw_categories, list) else []
     raw_answers = request.get("eligibility_answers", {})
@@ -181,8 +183,8 @@ def evaluate_eligibility(request: Mapping[str, Any]) -> dict[str, Any]:
     elif missing_information:
         status = "needs_review"
         explanation = (
-            "Manual review is required because one or more applicable checklist "
-            "answers or material-category details are missing or outside scope."
+            "The Standard MTA Process is required because one or more applicable "
+            "checklist answers or material-category details are missing or outside scope."
         )
     else:
         status = "eligible"

@@ -80,6 +80,9 @@ def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Pat
     assert "Professor" in text
     assert "Dr. Recipient" in text
     assert "Associate Professor" in text
+    assert "PROVIDER ORGANIZATION CERTIFICATION" in text
+    assert "Authorized Official:\tAlex Official" in text
+    assert "Address:\t100 Research Way, Example, MI 48100" in text
     assert "Synthetic plasmid pExample" in text
     assert "$125.00" in text
     assert "[enter amount]" not in text
@@ -89,6 +92,23 @@ def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Pat
     with ZipFile(artifact.path) as package:
         document_xml = package.read("word/document.xml")
     assert b'w:type="page"' in document_xml
+
+
+def test_ubmta_uses_recipient_scientist_as_certifier_when_authorized(tmp_path: Path):
+    request = request_for("biological")
+    information = request["agreement_information"]
+    information["recipient_scientist_can_certify_organization"] = True
+    information["recipient_authorized_official_name"] = ""
+    information["recipient_authorized_official_title"] = ""
+    information["recipient_authorized_official_email"] = ""
+
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "REQ-101-CERTIFIER", template("ubmta_implementing_letter"), request
+    )
+
+    text = document_text(artifact.path)
+    assert "Authorized Official:\tDr. Recipient" in text
+    assert "Alex Official" not in text
 
 
 def test_renderer_rejects_missing_required_agreement_data(tmp_path: Path):
@@ -102,10 +122,25 @@ def test_renderer_rejects_missing_required_agreement_data(tmp_path: Path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_renderer_rejects_non_automated_template(tmp_path: Path):
+def test_simple_letter_renderer_populates_material_parties_and_fee(tmp_path: Path):
     renderer = DocxAgreementRenderer(tmp_path)
 
-    with pytest.raises(UnsupportedTemplateError, match="simple_letter_agreement"):
-        renderer.render(
-            "REQ-103", template("simple_letter_agreement"), request_for("biological")
-        )
+    artifact = renderer.render(
+        "REQ-103", template("simple_letter_agreement"), request_for("device")
+    )
+
+    text = document_text(artifact.path)
+    for expected in (
+        "Synthetic plasmid pExample",
+        "$125.00",
+        "Dr. Provider",
+        "Professor",
+        "Dr. Recipient",
+        "Example University",
+        "100 Research Way, Example, MI 48100",
+        "Alex Official",
+        "Director of Research Agreements",
+    ):
+        assert expected in text
+    assert "[insert description]" not in text
+    assert "[insert fee here]" not in text
