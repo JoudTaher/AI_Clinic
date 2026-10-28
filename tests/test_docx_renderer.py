@@ -29,14 +29,18 @@ def document_text(path: Path) -> str:
 
 
 @pytest.mark.parametrize(
-    ("category", "template_id"),
+    ("category", "template_id", "expected_material"),
     [
-        ("chemical", "autm_chemical"),
-        ("animal_derived", "autm_biological"),
+        ("chemical", "autm_chemical", "Synthetic plasmid pExample"),
+        (
+            "animal_derived",
+            "autm_biological",
+            "Fixed, non-living mouse tissue samples",
+        ),
     ],
 )
 def test_autm_renderer_populates_parties_scientists_material_and_shipping(
-    tmp_path: Path, category: str, template_id: str
+    tmp_path: Path, category: str, template_id: str, expected_material: str
 ):
     renderer = DocxAgreementRenderer(tmp_path)
 
@@ -46,12 +50,12 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
     text = document_text(artifact.path)
     for expected in (
         "The Regents of the University of Michigan",
-        "Example University",
+            "Example U.S. Non-Profit University",
         "Dr. Provider",
         "Professor",
         "Dr. Recipient",
         "Associate Professor",
-        "Synthetic plasmid pExample",
+        expected_material,
         "100 Research Way, Example, MI 48100",
     ):
         assert expected in text
@@ -65,6 +69,9 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
         "./w:tr", namespaces=namespace
     )[1].xpath("./w:tc", namespaces=namespace)[1]
     assert populated_provider.xpath(".//w:highlight", namespaces=namespace) == []
+    assert set(
+        populated_provider.xpath(".//w:rPr/w:sz/@w:val", namespaces=namespace)
+    ) == {"18"}
 
 
 def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Path):
@@ -75,7 +82,7 @@ def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Pat
     )
 
     text = document_text(artifact.path)
-    assert "Organization:\tExample University" in text
+    assert "Organization:\tExample U.S. Non-Profit University" in text
     assert "Dr. Provider" in text
     assert "Professor" in text
     assert "Dr. Recipient" in text
@@ -122,6 +129,22 @@ def test_renderer_rejects_missing_required_agreement_data(tmp_path: Path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_renderer_rejects_missing_template_specific_authorized_official(
+    tmp_path: Path,
+):
+    request = request_for("device")
+    request["agreement_information"]["recipient_authorized_official_name"] = ""
+
+    with pytest.raises(
+        AgreementDataError, match="recipient_authorized_official_name"
+    ):
+        DocxAgreementRenderer(tmp_path).render(
+            "REQ-102-OFFICIAL", template("simple_letter_agreement"), request
+        )
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_simple_letter_renderer_populates_material_parties_and_fee(tmp_path: Path):
     renderer = DocxAgreementRenderer(tmp_path)
 
@@ -136,7 +159,7 @@ def test_simple_letter_renderer_populates_material_parties_and_fee(tmp_path: Pat
         "Dr. Provider",
         "Professor",
         "Dr. Recipient",
-        "Example University",
+        "Example U.S. Non-Profit University",
         "100 Research Way, Example, MI 48100",
         "Alex Official",
         "Director of Research Agreements",

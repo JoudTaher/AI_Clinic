@@ -5,7 +5,7 @@ import pytest
 from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.adapters.signnow_package_sender import SignNowPackageSender
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
-from tests.fixtures import request_for, verified_facts_for
+from tests.fixtures import request_for
 
 
 @pytest.mark.parametrize(
@@ -23,7 +23,6 @@ def test_real_standard_workflow_creates_agreement_and_signing_package(
     pipeline = OutgoingMTAPipeline(
         renderer=DocxAgreementRenderer(tmp_path / "agreements"),
         sender=SignNowPackageSender(tmp_path / "signing"),
-        verified_facts=verified_facts_for(category),
     )
 
     result = pipeline.run(request_for(category))

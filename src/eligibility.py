@@ -6,6 +6,7 @@ from typing import Any
 from src.materials import HUMAN_MATERIAL_TYPE, MATERIAL_TYPE_TO_CATEGORY
 from src.models import Criterion
 from src.request_normalization import normalize_request
+from src.semantic_rules import analyze_open_text
 
 
 SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
@@ -144,14 +145,37 @@ def _all_false(*values: Any) -> bool | None:
     return None
 
 
-def _true_fails_else_unknown(value: Any) -> bool | None:
-    return False if value is True else None
+def _recipient_nonprofit_fact(intake: Mapping[str, Any]) -> bool | None:
+    if intake.get("leaving_country") is True:
+        return False
+    entity = intake.get("recipient_entity")
+    if not isinstance(entity, str) or not entity.strip():
+        return None
+    normalized = entity.casefold()
+    if any(
+        marker in normalized
+        for marker in (" inc", " llc", " ltd", " gmbh", " corporation", " company")
+    ):
+        return False
+    return None
 
 
-def derive_checklist_facts(
+def _merge_fact(
+    structured: bool | None, semantic: bool | None
+) -> bool | None:
+    if structured is False or semantic is False:
+        return False
+    if structured is True:
+        return True
+    return semantic
+
+
+def _derive_checklist_assessment(
     request: Mapping[str, Any],
     verified_facts: Mapping[str, Any] | None = None,
-) -> dict[str, bool | None]:
+) -> tuple[dict[str, bool | None], dict[str, Any]]:
+
+
     """Apply checklist criteria only when questionnaire data proves the result.
 
     Criteria that the requester questionnaire cannot establish remain unresolved.
@@ -190,32 +214,102 @@ def derive_checklist_facts(
         for material_type in material_types
     )
 
+    raw_agreement = request.get("agreement_information", {})
+    agreement = raw_agreement if isinstance(raw_agreement, Mapping) else {}
+    semantic = analyze_open_text(
+        {
+            **{
+                field_id: intake.get(field_id, "")
+                for field_id in (
+                    "recipient_experimental_plan",
+                    "related_details",
+                    "human_derived_description",
+                    "human_data_classification",
+                    "protocol_consent_transfer_sections",
+                    "project_title",
+                    "recipient_entity",
+                )
+            },
+            "material_description": agreement.get("material_description", ""),
+        }
+    )
+    semantic_facts = semantic["facts"]
+
+    ownership_fact = None
+    external_funding = intake.get("external_funding_supported_development")
+    funding_fact = True if external_funding is False else None
+    paying_as_product = intake.get("paying_for_material_as_product_or_service")
+    commercial_fact = False if paying_as_product is True else None
+    device_ip_fact = None
+
     facts: dict[str, bool | None] = {
-        "recipient_is_us_nonprofit": None,
-        "um_owned_without_third_party_restrictions": None,
-        "internal_noncommercial_research_only": None,
-        "not_invention_report_patented_or_encumbered": _true_fails_else_unknown(
-            intake.get("previously_invention_report_or_licensed")
+        "recipient_is_us_nonprofit": _merge_fact(
+            _recipient_nonprofit_fact(intake),
+            semantic_facts["recipient_is_us_nonprofit"],
         ),
-        "no_funding_restrictions": None,
-        "no_human_subjects_materials_or_data": no_human_materials,
-        "not_controlled_beyond_ear99": _inverse_boolean(
-            intake.get("export_controlled")
+        "um_owned_without_third_party_restrictions": _merge_fact(
+            ownership_fact,
+            semantic_facts["um_owned_without_third_party_restrictions"],
         ),
-        "return_not_required": _inverse_boolean(intake.get("return_required")),
-        "chemical_no_heightened_ehs_risk": no_heightened_ehs_risk,
-        "chemical_not_used_in_humans": None,
-        "biological_nonradioactive": _inverse_boolean(intake.get("radioactive")),
-        "biological_material_definition_met": (
-            True if has_biological_material else None
+        "internal_noncommercial_research_only": _merge_fact(
+            commercial_fact,
+            semantic_facts["internal_noncommercial_research_only"],
         ),
-        "biological_safe_handling_storage_use": safe_handling,
-        "device_not_clinical_or_diagnostic": None,
-        "device_not_used_in_humans": None,
-        "device_no_embedded_third_party_ip": None,
-        "animal_no_live_animals": None,
-        "animal_no_restricted_species_or_permits": None,
-        "animal_nonliving_derivative_definition_met": None,
+        "not_invention_report_patented_or_encumbered": _merge_fact(
+            False
+            if intake.get("previously_invention_report_or_licensed") is True
+            else None,
+            semantic_facts["not_invention_report_patented_or_encumbered"],
+        ),
+        "no_funding_restrictions": _merge_fact(
+            funding_fact, semantic_facts["no_funding_restrictions"]
+        ),
+        "no_human_subjects_materials_or_data": _merge_fact(
+            no_human_materials,
+            semantic_facts["no_human_subjects_materials_or_data"],
+        ),
+        "not_controlled_beyond_ear99": _merge_fact(
+            _inverse_boolean(intake.get("export_controlled")),
+            semantic_facts["not_controlled_beyond_ear99"],
+        ),
+        "return_not_required": _merge_fact(
+            _inverse_boolean(intake.get("return_required")),
+            semantic_facts["return_not_required"],
+        ),
+        "chemical_no_heightened_ehs_risk": _merge_fact(
+            no_heightened_ehs_risk,
+            semantic_facts["chemical_no_heightened_ehs_risk"],
+        ),
+        "chemical_not_used_in_humans": semantic_facts[
+            "chemical_not_used_in_humans"
+        ],
+        "biological_nonradioactive": _merge_fact(
+            _inverse_boolean(intake.get("radioactive")),
+            semantic_facts["biological_nonradioactive"],
+        ),
+        "biological_material_definition_met": _merge_fact(
+            True if has_biological_material else None,
+            semantic_facts["biological_material_definition_met"],
+        ),
+        "biological_safe_handling_storage_use": _merge_fact(
+            safe_handling,
+            semantic_facts["biological_safe_handling_storage_use"],
+        ),
+        "device_not_clinical_or_diagnostic": semantic_facts[
+            "device_not_clinical_or_diagnostic"
+        ],
+        "device_not_used_in_humans": semantic_facts["device_not_used_in_humans"],
+        "device_no_embedded_third_party_ip": _merge_fact(
+            device_ip_fact,
+            semantic_facts["device_no_embedded_third_party_ip"],
+        ),
+        "animal_no_live_animals": semantic_facts["animal_no_live_animals"],
+        "animal_no_restricted_species_or_permits": semantic_facts[
+            "animal_no_restricted_species_or_permits"
+        ],
+        "animal_nonliving_derivative_definition_met": semantic_facts[
+            "animal_nonliving_derivative_definition_met"
+        ],
     }
     trusted = verified_facts if isinstance(verified_facts, Mapping) else {}
     for field_id, value in facts.items():
@@ -224,6 +318,14 @@ def derive_checklist_facts(
             facts[field_id] = False
         elif value is None and verified_value is True:
             facts[field_id] = verified_value
+    return facts, semantic
+
+
+def derive_checklist_facts(
+    request: Mapping[str, Any],
+    verified_facts: Mapping[str, Any] | None = None,
+) -> dict[str, bool | None]:
+    facts, _ = _derive_checklist_assessment(request, verified_facts)
     return facts
 
 
@@ -234,7 +336,7 @@ def evaluate_eligibility(
     request = normalize_request(request)
     raw_categories = request.get("material_categories", [])
     categories = raw_categories if isinstance(raw_categories, list) else []
-    answers = derive_checklist_facts(request, verified_facts)
+    answers, semantic = _derive_checklist_assessment(request, verified_facts)
 
     requested_sections = {
         CATEGORY_TO_SECTION[category]
@@ -298,4 +400,5 @@ def evaluate_eligibility(
         "missing_information": missing_information,
         "evaluated_sections": evaluated_sections,
         "explanation": explanation,
+        "semantic_assessment": semantic,
     }

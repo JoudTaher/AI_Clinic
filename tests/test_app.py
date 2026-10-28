@@ -28,7 +28,6 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert "Copy data from an existing UFA record?" not in labels
     assert "Project Title" in labels
     assert "Material Type" in labels
-    assert "Material information" in labels
     assert "Recipient Entity" in labels
     assert "Recipient Scientist Email" in labels
     assert "Contact PI phone" not in labels
@@ -36,8 +35,8 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert "Primary Research Administrator phone" not in labels
     assert "Primary Research Administrator email" not in labels
     assert "Sponsor name (if applicable)" not in labels
-    assert "Provider Scientist title" in labels
-    assert "Recipient Scientist title" in labels
+    assert "Provider Scientist title" not in labels
+    assert "Provider Scientist signing email" not in labels
     assert "Recipient's experimental plan for use of the material" in labels
     assert "Is the recipient a verified UBMTA signatory?" not in labels
     assert (
@@ -97,7 +96,7 @@ def test_human_material_selection_shows_only_source_form_conditionals():
         "Protocol and informed-consent sections allowing transfer outside U-M"
         in labels
     )
-    assert "Material information" in labels
+    assert "Original Material description" in labels
 
 
 def test_empty_submission_fails_closed_without_crashing():
@@ -109,3 +108,84 @@ def test_empty_submission_fails_closed_without_crashing():
 
     assert not app.exception
     assert any("questionnaire is incomplete" in item.value.lower() for item in app.warning)
+
+
+def test_ubmta_shows_only_ubmta_template_entries():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type"
+    )
+    material_types.select("Plasmid/Vector (rDNA or SNA)")
+    app.run(timeout=10)
+
+    labels = {
+        element.label
+        for group in (app.text_input, app.text_area, app.selectbox)
+        for element in group
+    }
+    assert "Original Material description" in labels
+    assert "Shipping recipient name" not in labels
+    assert "Shipping address" not in labels
+    assert "Recipient Scientist authorized to certify for Recipient Organization?" in labels
+
+
+def test_autm_shows_autm_shipping_and_signatory_entries():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type"
+    )
+    material_types.select("Chemical compound")
+    app.run(timeout=10)
+
+    labels = {
+        element.label
+        for group in (app.text_input, app.text_area, app.selectbox)
+        for element in group
+    }
+    assert "Material description" in labels
+    assert "Shipping recipient name" in labels
+    assert "Shipping address" in labels
+    assert "Recipient Authorized Signatory name" in labels
+
+
+def test_simple_letter_omits_autm_only_fields():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type"
+    )
+    material_types.select("Device")
+    app.run(timeout=10)
+
+    labels = {
+        element.label
+        for group in (app.text_input, app.text_area, app.selectbox)
+        for element in group
+    }
+    assert "Material description" in labels
+    assert "Recipient Scientist title" not in labels
+    assert "Shipping recipient name" not in labels
+    assert "Shipping address" not in labels
+    assert "Recipient Authorized Official name" in labels
+
+
+def test_mixed_selection_hides_all_template_specific_agreement_inputs():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type"
+    )
+    material_types.select("Chemical compound")
+    material_types.select("Device")
+    app.run(timeout=10)
+
+    labels = {
+        element.label
+        for group in (app.text_input, app.text_area, app.selectbox)
+        for element in group
+    }
+    assert "Provider Scientist title" not in labels
+    assert "Material description" not in labels
+    assert "Shipping address" not in labels

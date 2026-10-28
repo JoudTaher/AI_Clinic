@@ -74,7 +74,7 @@ COMPLETE_ERPM_INTAKE = {
     "hazardous_chemical_capacity_constraint": False,
     "project_administrative_home": "Example Department",
     "will_deposit_in_repository": False,
-    "recipient_entity": "Example University",
+    "recipient_entity": "Example U.S. Non-Profit University",
     "recipient_scientist_name": "Dr. Recipient",
     "recipient_scientist_email": "recipient.scientist@example.org",
     "recipient_administrative_contact_name": "",
@@ -93,7 +93,10 @@ COMPLETE_ERPM_INTAKE = {
     "managed_affiliate_work": False,
     "made_using_third_party_materials": False,
     "clinical_health_data_shared": False,
-    "related_details": "",
+    "related_details": (
+        "The material is owned by U-M with no third-party restrictions. "
+        "No invention report, patent, license, or encumbrance applies."
+    ),
     "related_document_names": [],
 }
 
@@ -102,10 +105,20 @@ def request_for(*categories: str) -> dict:
     intake = deepcopy(COMPLETE_ERPM_INTAKE)
     if categories == ("chemical",):
         intake["material_types"] = ["Chemical compound"]
+        intake["recipient_experimental_plan"] = (
+            "Internal, non-commercial laboratory research only. "
+            "The material will not be used in humans."
+        )
     elif categories == ("animal_derived",):
         intake["material_types"] = ["Mouse/Rat"]
+        intake["recipient_experimental_plan"] = (
+            "Internal, non-commercial laboratory research only."
+        )
     elif categories == ("device",):
         intake["material_types"] = ["Device"]
+        intake["recipient_experimental_plan"] = (
+            "Research use only. Not for use in humans or for clinical or diagnostic use."
+        )
     elif categories == ("other",):
         intake["material_types"] = ["Other material"]
     elif len(categories) > 1:
@@ -121,9 +134,25 @@ def request_for(*categories: str) -> dict:
             for category in categories
             if category in category_material
         ]
+    agreement = deepcopy(COMPLETE_AGREEMENT_INFORMATION)
+    if categories == ("animal_derived",):
+        agreement["material_description"] = (
+            "Fixed, non-living mouse tissue samples; no live animals, no restricted "
+            "species, and no special permits are involved."
+        )
+    if categories == ("biological",):
+        agreement.pop("shipping_recipient_name")
+        agreement.pop("shipping_address")
+    elif categories in {("chemical",), ("animal_derived",)}:
+        agreement.pop("recipient_scientist_can_certify_organization")
+    elif categories == ("device",):
+        agreement.pop("recipient_scientist_title")
+        agreement.pop("recipient_scientist_can_certify_organization")
+        agreement.pop("shipping_recipient_name")
+        agreement.pop("shipping_address")
     return {
         "erpm_intake": intake,
-        "agreement_information": deepcopy(COMPLETE_AGREEMENT_INFORMATION),
+        "agreement_information": agreement,
     }
 
 

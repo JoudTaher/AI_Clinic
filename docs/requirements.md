@@ -12,7 +12,7 @@ Missing questionnaire information is reported separately and does not alter chec
 
 ## Automatic approval
 
-The checklist is never displayed as requester input. The backend derives every checklist fact that the questionnaire proves directly. Facts that require institutional data are accepted only through a separate trusted backend verification input, never from the requester payload.
+The checklist is never displayed as requester input. The backend derives each checklist fact from the structured questionnaire answers and, where the source form provides only narrative data, conservative deterministic phrase rules. A trusted backend verification can supplement facts that institutional systems prove independently.
 
 Every request evaluates checklist Section A. Chemical, biological, device, and animal-material requests also evaluate Sections B, C, D, and E respectively.
 
@@ -22,7 +22,9 @@ Every request evaluates checklist Section A. Chemical, biological, device, and a
 
 The checklist refers to Sections B through F, but the supplied checklist contains no Section F.
 
-The standalone questionnaire does not prove every checklist fact, including recipient non-profit status, U-M ownership and restrictions, and internal non-commercial use. Those facts remain unresolved and route to eRPM until an institutional verification source is connected.
+The text analyzer uses the free, MIT-licensed spaCy library for local English sentence segmentation, then applies auditable checklist-specific phrase and negation rules. Explicit disqualifying language fails a rule; explicit qualifying language may pass it; ambiguous language remains unresolved and routes to eRPM. Every text decision records the matched phrase and source field in the screening report. It does not use a generative model, send text to a network service, or infer unstated facts.
+
+Structured proxies are limited to the checklist comparison documented by the supplied sources: recipient organization type plus domestic-transfer answer, third-party-material answer, invention/licensing answer, funding answer, human-material/data answers, export-control answer, return answer, and category-specific safety answers. A negative or unresolved signal is never converted to a pass by text.
 
 ## Agreement mapping
 
@@ -33,11 +35,21 @@ The standalone questionnaire does not prove every checklist fact, including reci
 
 Mixed material categories never select an agreement automatically. Standard legal terms are unchanged; each template has an explicit tested population strategy.
 
+Agreement fields are conditional on the selected template:
+
+- AUTM Chemical and AUTM Biological: recipient organization address, both scientist titles, material description, shipping recipient/address, and recipient authorized signatory identity and signing email.
+- UBMTA Implementing Letter: recipient organization address, both scientist titles, original-material description, recipient scientist certification authority, and a separate recipient authorized official only when required.
+- Simple Letter Agreement: recipient organization address, material description, recipient scientist signing email, and recipient authorized official identity and signing email. It does not request an unprinted recipient-scientist title or AUTM shipping slots.
+
+Provider and recipient names, organization, and transmittal fee are reused from the requester questionnaire. Research purpose and duration remain generation context unless the selected standard template has an approved population slot; the system does not silently activate optional legal terms. The checklist-sourced shipping-payment and no-cost answers are required agreement-term validations; a conflicting answer routes for review. Signing emails are delivery data and are not printed into the agreement.
+
 The combined “Other Model Organism (yeast, drosophila, zebrafish)” questionnaire option is routed to eRPM because it does not identify one unambiguous checklist section.
 
 ## Pipeline
 
-The backend follows `questionnaire completeness -> derive checklist facts -> apply trusted system verifications -> checklist decision -> template selection -> agreement-data completeness -> DOCX population -> signing package`.
+The backend follows `questionnaire completeness -> structured and semantic checklist facts -> trusted system verifications -> checklist decision -> template selection -> template-specific agreement completeness -> DOCX population -> signing package`.
+
+The downloadable screening report contains the normalized agreement information and an input-usage map. Every submitted field is assigned to intake validation, an eligibility rule, semantic analysis, agreement population, agreement-term validation, signing, routing/contact context, or the evidence/audit record. An unexpected field is marked `unmapped_input` instead of being silently ignored; a stale field that does not belong to the selected template is marked `not_applicable_to_selected_template`.
 
 The pipeline derives an internal deterministic submission identifier from the normalized submission. It is not a requester input and is not displayed as a form field. Identical submissions do not prepare duplicate packages within one pipeline store.
 

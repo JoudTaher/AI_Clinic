@@ -117,6 +117,21 @@ def test_simple_letter_package_matches_visible_signature_roles(tmp_path: Path):
     assert [signer["order"] for signer in manifest["signers"]] == [1, 1, 2]
 
 
+def test_simple_letter_ignores_stale_recipient_scientist_title(tmp_path: Path):
+    request = request_for("device")
+    request["agreement_information"]["recipient_scientist_title"] = "Stale title"
+    sender = SignNowPackageSender(tmp_path / "signing")
+
+    receipt = sender.send(
+        "REQ-SIMPLE-STALE",
+        request,
+        artifact(tmp_path, "simple_letter_agreement"),
+    )
+
+    manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
+    assert manifest["signers"][0]["title"] == ""
+
+
 def test_unsupported_template_does_not_write_manifest(tmp_path: Path):
     output_dir = tmp_path / "signing"
     sender = SignNowPackageSender(output_dir)

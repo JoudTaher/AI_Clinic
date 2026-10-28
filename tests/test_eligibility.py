@@ -56,19 +56,13 @@ def test_verified_blocker_overrides_less_restrictive_questionnaire_signal():
     assert "biological_safe_handling_storage_use" in ids(result["failed_checks"])
 
 
-def test_questionnaire_only_facts_do_not_silently_pass_unverifiable_rules():
+def test_complete_questionnaire_with_explicit_text_can_auto_approve():
     result = evaluate_eligibility(plasmid_request())
 
-    assert result["status"] == "needs_review"
+    assert result["status"] == "eligible"
     assert result["evaluated_sections"] == ["A", "C"]
     assert result["failed_checks"] == []
-    assert "recipient_is_us_nonprofit" in ids(result["missing_information"])
-    assert "um_owned_without_third_party_restrictions" in ids(
-        result["missing_information"]
-    )
-    assert "internal_noncommercial_research_only" in ids(
-        result["missing_information"]
-    )
+    assert result["missing_information"] == []
 
 
 def test_human_derived_material_is_ineligible():
@@ -77,9 +71,10 @@ def test_human_derived_material_is_ineligible():
     assert "no_human_subjects_materials_or_data" in ids(result["failed_checks"])
 
 
-def test_third_party_material_answer_cannot_be_treated_as_um_ownership_proof():
+def test_third_party_material_answer_routes_ownership_rule_for_review():
     request = plasmid_request()
     request["erpm_intake"]["made_using_third_party_materials"] = True
+    request["erpm_intake"]["related_details"] = ""
     result = evaluate_eligibility(request)
     assert result["status"] == "needs_review"
     assert "um_owned_without_third_party_restrictions" in ids(
@@ -116,3 +111,75 @@ def test_failed_general_condition_takes_precedence_over_missing_category():
     result = evaluate_eligibility(request)
     assert result["status"] == "ineligible"
     assert "return_not_required" in ids(result["failed_checks"])
+
+
+def test_questionnaire_and_explicit_text_can_satisfy_documented_rules():
+    request = request_for("chemical")
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "Example U.S. Non-Profit University",
+            "leaving_country": False,
+            "recipient_experimental_plan": (
+                "Internal, non-commercial laboratory research only. "
+                "Not for use in humans."
+            ),
+            "made_using_third_party_materials": False,
+            "previously_invention_report_or_licensed": False,
+            "external_funding_supported_development": False,
+        }
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "eligible"
+    assert result["missing_information"] == []
+    assert result["semantic_assessment"]["method"] == (
+        "spacy_sentence_scoped_phrase_rules"
+    )
+
+
+def test_ambiguous_text_never_becomes_an_automatic_pass():
+    request = request_for("device")
+    request["erpm_intake"]["recipient_experimental_plan"] = "Study performance."
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "needs_review"
+    assert "internal_noncommercial_research_only" in ids(result["missing_information"])
+    assert "device_not_used_in_humans" in ids(result["missing_information"])
+
+
+def test_third_party_material_answer_does_not_claim_a_restriction_without_evidence():
+    request = plasmid_request()
+    request["erpm_intake"]["made_using_third_party_materials"] = True
+    request["erpm_intake"]["related_details"] = ""
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "needs_review"
+    assert "um_owned_without_third_party_restrictions" in ids(result["missing_information"])
+
+
+def test_disqualifying_narrative_overrides_structured_proxy_answers():
+    request = plasmid_request()
+    request["erpm_intake"]["related_details"] = (
+        "The material is patented and encumbered, owned by another party subject "
+        "to third-party restrictions, and is a DEA Schedule II controlled substance."
+    )
+
+    result = evaluate_eligibility(request)
+
+    failed = ids(result["failed_checks"])
+    assert result["status"] == "ineligible"
+    assert "not_invention_report_patented_or_encumbered" in failed
+    assert "um_owned_without_third_party_restrictions" in failed
+    assert "not_controlled_beyond_ear99" in failed
+
+
+def test_university_name_alone_does_not_prove_nonprofit_status():
+    request = plasmid_request()
+    request["erpm_intake"]["recipient_entity"] = "Example University"
+
+    result = evaluate_eligibility(request)
+
+    assert "recipient_is_us_nonprofit" in ids(result["missing_information"])

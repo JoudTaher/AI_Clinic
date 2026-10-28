@@ -99,12 +99,29 @@ class OutgoingMTAPipeline:
 
         agreement_readiness = evaluate_agreement_readiness(request)
         if agreement_readiness["status"] == "missing_information":
+            reasons = (
+                agreement_readiness["missing_fields"]
+                or agreement_readiness["review_reasons"]
+            )
             return PipelineResult(
                 submission_id=submission_id,
                 status="agreement_incomplete",
                 selected_template=selected_template,
-                reasons=tuple(agreement_readiness["missing_fields"]),
+                reasons=tuple(reasons),
                 audit_events=audit + ("agreement_information_checked",),
+            )
+        if agreement_readiness["status"] != "ready":
+            return PipelineResult(
+                submission_id=submission_id,
+                status="routed_to_erpm",
+                selected_template=selected_template,
+                reasons=tuple(agreement_readiness["review_reasons"]),
+                audit_events=audit
+                + (
+                    "agreement_information_checked",
+                    "agreement_terms_need_review",
+                    "routed_to_erpm",
+                ),
             )
 
         template = next(

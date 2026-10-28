@@ -47,13 +47,20 @@ class SignNowPackageSender:
         prefix: str,
         roles: list[str],
         order: int,
+        *,
+        require_title: bool = True,
     ) -> dict[str, object]:
+        title = (
+            cls._required_text(data, f"{prefix}_title")
+            if require_title
+            else ""
+        )
         return {
             "email": cls._required_email(data, f"{prefix}_email"),
             "name": cls._required_text(data, f"{prefix}_name"),
             "order": order,
             "roles": roles,
-            "title": cls._required_text(data, f"{prefix}_title"),
+            "title": title,
         }
 
     @classmethod
@@ -114,7 +121,11 @@ class SignNowPackageSender:
         if template_id == "simple_letter_agreement":
             return [
                 self._person(
-                    information, "recipient_scientist", ["recipient_scientist"], 1
+                    information,
+                    "recipient_scientist",
+                    ["recipient_scientist"],
+                    1,
+                    require_title=False,
                 ),
                 self._person(
                     information,

@@ -174,57 +174,102 @@ related_documents = st.file_uploader(
 related_details = st.text_area("Other Relevant Details")
 
 selected_categories = derive_material_categories(material_types)
+selected_category = selected_categories[0] if len(selected_categories) == 1 else None
+supported_categories = {"chemical", "animal_derived", "biological", "device"}
 
 st.subheader("Agreement and Signing Information")
 st.caption(
-    "Complete this information only for generating and signing the agreement after "
-    "the request passes the checklist. Values already entered above are reused."
+    "These are the population and signer fields in the agreement selected by the "
+    "material type. Names, organization, research purpose, duration, and fee entered "
+    "above are reused."
 )
-agreement_left, agreement_right = st.columns(2)
-with agreement_left:
-    provider_scientist_title = st.text_input("Provider Scientist title")
-    provider_scientist_email = st.text_input("Provider Scientist email")
-    recipient_scientist_title = st.text_input("Recipient Scientist title")
-    recipient_institution_address = st.text_area("Recipient Institution address")
-    material_description = st.text_area("Material information")
-with agreement_right:
-    shipping_recipient_name = st.text_input("Shipping recipient name")
-    shipping_address = st.text_area("Shipping address")
-    recipient_pays_shipping = answer_input(
-        "Will the Recipient Scientist pay the shipping costs?",
-        "recipient_pays_shipping",
-    )
-    material_provided_at_no_cost = answer_input(
-        "Will the Provider Scientist provide the materials at no cost?",
-        "material_provided_at_no_cost",
-    )
-
+provider_scientist_title = ""
+provider_scientist_email = ""
+recipient_scientist_title = ""
+recipient_institution_address = ""
+material_description = ""
+shipping_recipient_name = ""
+shipping_address = ""
 recipient_scientist_can_certify: bool | None = None
-if selected_categories == ["biological"]:
-    recipient_scientist_can_certify = answer_input(
-        "Is the Recipient Scientist authorized to certify for the Recipient organization?",
-        "recipient_scientist_can_certify_organization",
-    )
-
-requires_recipient_official = selected_categories in (
-    ["chemical"],
-    ["animal_derived"],
-    ["device"],
-) or (
-    selected_categories == ["biological"]
-    and recipient_scientist_can_certify is False
-)
 recipient_official_name = ""
 recipient_official_title = ""
 recipient_official_email = ""
-if requires_recipient_official:
-    official_left, official_middle, official_right = st.columns(3)
-    with official_left:
-        recipient_official_name = st.text_input("Recipient authorized official name")
-    with official_middle:
-        recipient_official_title = st.text_input("Recipient authorized official title")
-    with official_right:
-        recipient_official_email = st.text_input("Recipient authorized official email")
+
+recipient_pays_shipping: bool | None = None
+material_provided_at_no_cost: bool | None = None
+if selected_category in supported_categories:
+    agreement_left, agreement_right = st.columns(2)
+    with agreement_left:
+        provider_scientist_title = st.text_input("Provider Scientist title")
+        provider_scientist_email = st.text_input(
+            "Provider Scientist signing email",
+            help="Used to deliver the signing request; it is not printed in the agreement.",
+        )
+        if selected_category in {"chemical", "animal_derived", "biological"}:
+            recipient_scientist_title = st.text_input("Recipient Scientist title")
+    with agreement_right:
+        recipient_institution_address = st.text_area("Recipient Organization address")
+        material_label = (
+            "Original Material description"
+            if selected_category == "biological"
+            else "Material description"
+        )
+        material_description = st.text_area(material_label)
+
+    terms_left, terms_right = st.columns(2)
+    with terms_left:
+        recipient_pays_shipping = answer_input(
+            "Will the Recipient Scientist pay the shipping costs?",
+            "recipient_pays_shipping",
+        )
+    with terms_right:
+        material_provided_at_no_cost = answer_input(
+            "Will the Provider Scientist provide the materials at no cost?",
+            "material_provided_at_no_cost",
+            "A preparation or distribution reimbursement entered above is still allowed.",
+        )
+
+    if selected_category in {"chemical", "animal_derived"}:
+        shipping_left, shipping_right = st.columns(2)
+        with shipping_left:
+            shipping_recipient_name = st.text_input("Shipping recipient name")
+        with shipping_right:
+            shipping_address = st.text_area("Shipping address")
+
+    if selected_category == "biological":
+        recipient_scientist_can_certify = answer_input(
+            "Recipient Scientist authorized to certify for Recipient Organization?",
+            "recipient_scientist_can_certify_organization",
+        )
+
+    requires_recipient_official = selected_category in {
+        "chemical",
+        "animal_derived",
+        "device",
+    } or (
+        selected_category == "biological"
+        and recipient_scientist_can_certify is False
+    )
+    if requires_recipient_official:
+        official_role = (
+            "Recipient Authorized Signatory"
+            if selected_category in {"chemical", "animal_derived"}
+            else "Recipient Authorized Official"
+        )
+        official_left, official_middle, official_right = st.columns(3)
+        with official_left:
+            recipient_official_name = st.text_input(f"{official_role} name")
+        with official_middle:
+            recipient_official_title = st.text_input(f"{official_role} title")
+        with official_right:
+            recipient_official_email = st.text_input(
+                f"{official_role} signing email",
+                help="Used to deliver the signing request; it is not printed in the agreement.",
+            )
+else:
+    st.info(
+        "Select exactly one supported material category to show the matching agreement fields."
+    )
 
 submitted = st.button("Process request", type="primary")
 
@@ -270,23 +315,43 @@ if submitted:
         "related_document_names": [document.name for document in related_documents],
         "related_details": related_details,
     }
+    agreement_information: dict[str, object] = {}
+    if selected_category in supported_categories:
+        agreement_information.update(
+            {
+                "recipient_institution_address": recipient_institution_address,
+                "provider_scientist_title": provider_scientist_title,
+                "provider_scientist_email": provider_scientist_email,
+                "material_description": material_description,
+                "recipient_pays_shipping": recipient_pays_shipping,
+                "material_provided_at_no_cost": material_provided_at_no_cost,
+            }
+        )
+    if selected_category in {"chemical", "animal_derived", "biological"}:
+        agreement_information["recipient_scientist_title"] = recipient_scientist_title
+    if selected_category in {"chemical", "animal_derived"}:
+        agreement_information.update(
+            {
+                "shipping_recipient_name": shipping_recipient_name,
+                "shipping_address": shipping_address,
+            }
+        )
+    if selected_category == "biological":
+        agreement_information[
+            "recipient_scientist_can_certify_organization"
+        ] = recipient_scientist_can_certify
+    if recipient_official_name or recipient_official_title or recipient_official_email:
+        agreement_information.update(
+            {
+                "recipient_authorized_official_name": recipient_official_name,
+                "recipient_authorized_official_title": recipient_official_title,
+                "recipient_authorized_official_email": recipient_official_email,
+            }
+        )
+
     request = {
         "erpm_intake": erpm_intake,
-        "agreement_information": {
-            "recipient_institution_address": recipient_institution_address,
-            "recipient_scientist_title": recipient_scientist_title,
-            "recipient_scientist_can_certify_organization": recipient_scientist_can_certify,
-            "recipient_authorized_official_name": recipient_official_name,
-            "recipient_authorized_official_title": recipient_official_title,
-            "recipient_authorized_official_email": recipient_official_email,
-            "provider_scientist_title": provider_scientist_title,
-            "provider_scientist_email": provider_scientist_email,
-            "material_description": material_description,
-            "recipient_pays_shipping": recipient_pays_shipping,
-            "material_provided_at_no_cost": material_provided_at_no_cost,
-            "shipping_recipient_name": shipping_recipient_name,
-            "shipping_address": shipping_address,
-        },
+        "agreement_information": agreement_information,
     }
 
     report = build_screening_report(request)
@@ -351,7 +416,7 @@ if submitted:
         manifest_path = Path(pipeline_result.delivery_reference or "")
         if agreement_path.is_file():
             st.download_button(
-                "Download populated agreement",
+                "Download final agreement for signing",
                 data=agreement_path.read_bytes(),
                 file_name=agreement_path.name,
                 mime=(

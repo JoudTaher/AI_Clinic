@@ -63,7 +63,11 @@ def _replace_paragraph_text(paragraph: etree._Element, value: str) -> None:
 
 
 def _set_cell_text(
-    cell: etree._Element, value: str, *, preserve_run_formatting: bool = True
+    cell: etree._Element,
+    value: str,
+    *,
+    preserve_run_formatting: bool = True,
+    font_size_half_points: int | None = None,
 ) -> None:
     original_paragraph = next(iter(cell.xpath("./w:p", namespaces=NS)), None)
     paragraph_properties = None
@@ -98,6 +102,16 @@ def _set_cell_text(
         size.set(_word("val"), "22")
         complex_size = etree.SubElement(run_properties, _word("szCs"))
         complex_size.set(_word("val"), "22")
+    if font_size_half_points is not None:
+        run_properties = run.find(_word("rPr"))
+        if run_properties is None:
+            run_properties = etree.Element(_word("rPr"))
+            run.insert(0, run_properties)
+        for tag in (_word("sz"), _word("szCs")):
+            for existing_size in run_properties.findall(tag):
+                run_properties.remove(existing_size)
+            size = etree.SubElement(run_properties, tag)
+            size.set(_word("val"), str(font_size_half_points))
     parts = value.split("\n")
     for index, part in enumerate(parts):
         if index:
@@ -132,7 +146,7 @@ class DocxAgreementRenderer:
             )
 
         request = normalize_request(request)
-        data = AgreementData.from_request(request)
+        data = AgreementData.from_request(request, template.template_id)
         with ZipFile(template.source_path) as source:
             root = etree.fromstring(source.read("word/document.xml"))
             if template.template_id in self._AUTM_IDS:
@@ -196,7 +210,11 @@ class DocxAgreementRenderer:
         )
         try:
             for table, row, column, value in values:
-                _set_cell_text(cls._cell(tables, table, row, column), value)
+                _set_cell_text(
+                    cls._cell(tables, table, row, column),
+                    value,
+                    font_size_half_points=18,
+                )
             cls._clear_form_fields(tables[3])
         except IndexError as error:
             raise UnsupportedTemplateError(

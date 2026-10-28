@@ -14,12 +14,15 @@ def test_report_contains_separate_decisions():
         "disclaimer",
         "delivery_policy",
         "erpm_intake",
+        "agreement_information",
         "intake_readiness",
         "eligibility",
         "agreement_readiness",
+        "input_usage",
         "template_selection",
     }
     assert report["erpm_intake"] == {"project_title": "Synthetic plasmid transfer"}
+    assert "recipient_institution_name" in report["agreement_information"]
     assert report["intake_readiness"]["status"] == "missing_information"
     assert report["delivery_policy"] == {
         "internal_approval_required": False,

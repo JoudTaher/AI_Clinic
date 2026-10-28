@@ -88,18 +88,6 @@ def test_standard_request_is_auto_approved_and_prepared():
     assert sender.calls == 1
 
 
-def test_no_cost_answer_does_not_change_automatic_approval():
-    pipeline, renderer, sender = pipeline_with_recorders()
-    request = request_for("chemical")
-    request["agreement_information"]["material_provided_at_no_cost"] = False
-
-    result = pipeline.run(request)
-
-    assert result.status == "prepared_for_signature"
-    assert renderer.calls == 1
-    assert sender.calls == 1
-
-
 def test_missing_agreement_information_stops_after_template_selection():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("chemical")
@@ -110,6 +98,50 @@ def test_missing_agreement_information_stops_after_template_selection():
     assert result.status == "agreement_incomplete"
     assert result.selected_template == "autm_chemical"
     assert "material_description" in result.reasons
+    assert renderer.calls == 0
+    assert sender.calls == 0
+
+
+def test_nonstandard_agreement_terms_route_to_erpm_before_rendering():
+    pipeline, renderer, sender = pipeline_with_recorders()
+    request = request_for("chemical")
+    request["agreement_information"]["material_provided_at_no_cost"] = False
+
+    result = pipeline.run(request)
+
+    assert result.status == "routed_to_erpm"
+    assert result.selected_template == "autm_chemical"
+    assert "Provider material is not supplied at no cost." in result.reasons
+    assert "agreement_terms_need_review" in result.audit_events
+    assert renderer.calls == 0
+    assert sender.calls == 0
+
+
+def test_contradictory_device_language_routes_before_rendering():
+    pipeline, renderer, sender = pipeline_with_recorders()
+    request = request_for("device")
+    request["erpm_intake"]["recipient_experimental_plan"] += (
+        " This device will be used for clinical diagnosis in patients."
+    )
+
+    result = pipeline.run(request)
+
+    assert result.status == "routed_to_erpm"
+    assert renderer.calls == 0
+    assert sender.calls == 0
+
+
+def test_third_party_license_language_routes_before_rendering():
+    pipeline, renderer, sender = pipeline_with_recorders()
+    request = request_for("biological")
+    request["erpm_intake"]["made_using_third_party_materials"] = True
+    request["erpm_intake"]["related_details"] += (
+        " It incorporates a component licensed from a third party."
+    )
+
+    result = pipeline.run(request)
+
+    assert result.status == "routed_to_erpm"
     assert renderer.calls == 0
     assert sender.calls == 0
 

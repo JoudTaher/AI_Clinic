@@ -28,30 +28,13 @@ def test_whitespace_only_value_is_missing():
     assert "material_description" in result["missing_fields"]
 
 
-def test_no_cost_answer_is_required_information_not_an_eligibility_rule():
+def test_ubmta_does_not_require_shipping_address():
     request = plasmid_request()
-    request["agreement_information"]["material_provided_at_no_cost"] = False
+    request["agreement_information"].pop("shipping_address", None)
+
     result = evaluate_agreement_readiness(request)
+
     assert result["status"] == "ready"
-    assert result["review_reasons"] == []
-
-
-def test_recipient_shipping_payment_answer_must_be_boolean():
-    request = plasmid_request()
-    request["agreement_information"]["recipient_pays_shipping"] = "unspecified"
-    result = evaluate_agreement_readiness(request)
-    assert result["status"] == "missing_information"
-    assert "recipient_pays_shipping" in result["missing_fields"]
-
-
-def test_missing_renderer_field_is_reported_before_generation():
-    request = plasmid_request()
-    request["agreement_information"].pop("shipping_address")
-
-    result = evaluate_agreement_readiness(request)
-
-    assert result["status"] == "missing_information"
-    assert "shipping_address" in result["missing_fields"]
 
 
 def test_autm_request_requires_recipient_authorized_official():
@@ -85,3 +68,70 @@ def test_ubmta_scientist_certifier_does_not_require_separate_official():
     result = evaluate_agreement_readiness(request)
 
     assert result["status"] == "ready"
+
+
+def test_ubmta_does_not_require_autm_shipping_slots():
+    request = plasmid_request()
+    information = request["agreement_information"]
+    information.pop("shipping_recipient_name", None)
+    information.pop("shipping_address", None)
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "ready"
+
+
+def test_simple_letter_does_not_require_unprinted_recipient_title_or_shipping():
+    request = request_for("device")
+    information = request["agreement_information"]
+    information.pop("recipient_scientist_title", None)
+    information.pop("shipping_recipient_name", None)
+    information.pop("shipping_address", None)
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "ready"
+
+
+def test_autm_still_requires_template_shipping_slots():
+    request = request_for("chemical")
+    request["agreement_information"].pop("shipping_address")
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "missing_information"
+    assert "shipping_address" in result["missing_fields"]
+
+
+def test_agreement_readiness_is_not_applicable_without_one_supported_template():
+    request = request_for("chemical", "biological")
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result == {
+        "status": "not_applicable",
+        "missing_fields": [],
+        "review_reasons": [
+            "Agreement fields apply only after one supported material category is selected."
+        ],
+    }
+
+
+def test_checklist_required_shipping_and_no_cost_answers_are_required():
+    request = plasmid_request()
+    request["agreement_information"].pop("recipient_pays_shipping")
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "missing_information"
+    assert "recipient_pays_shipping" in result["missing_fields"]
+
+
+def test_nonstandard_cost_term_routes_for_review():
+    request = plasmid_request()
+    request["agreement_information"]["material_provided_at_no_cost"] = False
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "needs_review"
+    assert "Provider material is not supplied at no cost." in result["review_reasons"]
