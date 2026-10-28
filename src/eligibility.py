@@ -146,8 +146,11 @@ def _all_false(*values: Any) -> bool | None:
 
 
 def _recipient_nonprofit_fact(intake: Mapping[str, Any]) -> bool | None:
-    if intake.get("leaving_country") is True:
+    leaving_country = intake.get("leaving_country")
+    if leaving_country is True:
         return False
+    if leaving_country is not False:
+        return None
     entity = intake.get("recipient_entity")
     if not isinstance(entity, str) or not entity.strip():
         return None
@@ -157,6 +160,18 @@ def _recipient_nonprofit_fact(intake: Mapping[str, Any]) -> bool | None:
         for marker in (" inc", " llc", " ltd", " gmbh", " corporation", " company")
     ):
         return False
+    if any(
+        marker in normalized
+        for marker in (
+            "university",
+            "college",
+            "non-profit",
+            "nonprofit",
+            "research organization",
+            "research institute",
+        )
+    ):
+        return True
     return None
 
 
@@ -235,12 +250,30 @@ def _derive_checklist_assessment(
     )
     semantic_facts = semantic["facts"]
 
-    ownership_fact = None
+    third_party_materials = intake.get("made_using_third_party_materials")
+    ownership_fact = True if third_party_materials is False else None
     external_funding = intake.get("external_funding_supported_development")
     funding_fact = True if external_funding is False else None
     paying_as_product = intake.get("paying_for_material_as_product_or_service")
-    commercial_fact = False if paying_as_product is True else None
-    device_ip_fact = None
+    commercial_fact = (
+        False
+        if paying_as_product is True
+        else True
+        if paying_as_product is False
+        and _recipient_nonprofit_fact(intake) is True
+        and isinstance(intake.get("recipient_experimental_plan"), str)
+        and bool(intake["recipient_experimental_plan"].strip())
+        else None
+    )
+    invention_or_license = intake.get("previously_invention_report_or_licensed")
+    invention_fact = (
+        False
+        if invention_or_license is True
+        else True
+        if invention_or_license is False
+        else None
+    )
+    device_ip_fact = True if third_party_materials is False else None
 
     facts: dict[str, bool | None] = {
         "recipient_is_us_nonprofit": _merge_fact(
@@ -256,9 +289,7 @@ def _derive_checklist_assessment(
             semantic_facts["internal_noncommercial_research_only"],
         ),
         "not_invention_report_patented_or_encumbered": _merge_fact(
-            False
-            if intake.get("previously_invention_report_or_licensed") is True
-            else None,
+            invention_fact,
             semantic_facts["not_invention_report_patented_or_encumbered"],
         ),
         "no_funding_restrictions": _merge_fact(

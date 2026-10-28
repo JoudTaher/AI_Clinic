@@ -26,6 +26,16 @@ The text analyzer uses the free, MIT-licensed spaCy library for local English se
 
 Structured proxies are limited to the checklist comparison documented by the supplied sources: recipient organization type plus domestic-transfer answer, third-party-material answer, invention/licensing answer, funding answer, human-material/data answers, export-control answer, return answer, and category-specific safety answers. A negative or unresolved signal is never converted to a pass by text.
 
+The general checklist rules use the submitted questionnaire as follows:
+
+- A domestic destination plus a recipient name identifying a university, college, non-profit, or research organization satisfies the U.S. non-profit rule. A foreign destination or company/corporate entity fails it; an unrecognized entity remains unresolved.
+- “No” to materials made using another party's or commercially purchased materials satisfies the ownership/no-third-party-restrictions rule. “Yes” requires review unless other evidence explicitly resolves the restriction.
+- “No” to purchasing a product/service, a qualifying non-profit recipient, and a completed recipient experimental plan satisfy the internal non-commercial-research rule. Explicit commercial or product-development language overrides that result and fails the rule.
+- “No” to the prior U-M invention-report/licensing question satisfies the invention-report/patent/encumbrance rule. “Yes” fails it.
+- The remaining general and material-specific rules use their corresponding funding, human-material/data, export-control, return, material-type, safety, and narrative-use answers. Explicit conflicting narrative language always overrides a structured pass.
+
+Material description is not an eligibility rule. It is required only after eligibility and template selection so the selected legal agreement can be populated accurately.
+
 ## Agreement mapping
 
 - Animal materials → AUTM MTA for Biological Materials

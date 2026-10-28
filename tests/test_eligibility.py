@@ -138,14 +138,14 @@ def test_questionnaire_and_explicit_text_can_satisfy_documented_rules():
     )
 
 
-def test_ambiguous_text_never_becomes_an_automatic_pass():
+def test_ambiguous_device_use_text_keeps_device_rules_unresolved():
     request = request_for("device")
     request["erpm_intake"]["recipient_experimental_plan"] = "Study performance."
 
     result = evaluate_eligibility(request)
 
     assert result["status"] == "needs_review"
-    assert "internal_noncommercial_research_only" in ids(result["missing_information"])
+    assert "internal_noncommercial_research_only" in ids(result["passed_checks"])
     assert "device_not_used_in_humans" in ids(result["missing_information"])
 
 
@@ -176,10 +176,45 @@ def test_disqualifying_narrative_overrides_structured_proxy_answers():
     assert "not_controlled_beyond_ear99" in failed
 
 
-def test_university_name_alone_does_not_prove_nonprofit_status():
+def test_domestic_university_name_satisfies_nonprofit_institution_rule():
     request = plasmid_request()
     request["erpm_intake"]["recipient_entity"] = "Example University"
+    request["erpm_intake"]["leaving_country"] = False
 
     result = evaluate_eligibility(request)
 
-    assert "recipient_is_us_nonprofit" in ids(result["missing_information"])
+    assert "recipient_is_us_nonprofit" in ids(result["passed_checks"])
+
+
+def test_completed_original_form_style_plasmid_request_is_eligible():
+    request = plasmid_request()
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "Michigan State University",
+            "leaving_country": False,
+            "paying_for_material_as_product_or_service": False,
+            "recipient_experimental_plan": (
+                "The recipient will study plasmid expression in laboratory cells."
+            ),
+            "made_using_third_party_materials": False,
+            "previously_invention_report_or_licensed": False,
+            "related_details": "",
+        }
+    )
+    request["agreement_information"]["material_description"] = ""
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "eligible"
+    assert result["failed_checks"] == []
+    assert result["missing_information"] == []
+
+
+def test_no_third_party_materials_satisfies_device_ip_rule():
+    request = request_for("device")
+    request["erpm_intake"]["made_using_third_party_materials"] = False
+    request["erpm_intake"]["related_details"] = ""
+
+    result = evaluate_eligibility(request)
+
+    assert "device_no_embedded_third_party_ip" in ids(result["passed_checks"])
