@@ -16,7 +16,7 @@ def test_app_loads_erpm_aligned_intake_sections():
         "Material Safety",
         "Outgoing Material Details",
     ]
-    assert "Automatic Approval Eligibility Checklist" in headings
+    assert "Automatic Approval Eligibility Checklist" not in headings
     assert "Agreement and Signing Information" in headings
 
     labels = {
@@ -40,6 +40,11 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert "Recipient Scientist title" in labels
     assert "Recipient's experimental plan for use of the material" in labels
     assert "Is the recipient a verified UBMTA signatory?" not in labels
+    assert (
+        "Material is being sent from UM to a U.S. non-profit institution "
+        "(e.g., university, college, non-profit, or research organization)"
+        not in labels
+    )
     assert (
         "Has the Simple Letter Agreement been authorized for this request?" not in labels
     )

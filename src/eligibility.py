@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from src.materials import HUMAN_MATERIAL_TYPE, MATERIAL_TYPE_TO_CATEGORY
 from src.models import Criterion
 from src.request_normalization import normalize_request
 
@@ -131,12 +132,109 @@ def _scope_issue(message: str) -> dict[str, str]:
     }
 
 
-def evaluate_eligibility(request: Mapping[str, Any]) -> dict[str, Any]:
+def _inverse_boolean(value: Any) -> bool | None:
+    return not value if isinstance(value, bool) else None
+
+
+def _all_false(*values: Any) -> bool | None:
+    if any(value is True for value in values):
+        return False
+    if all(value is False for value in values):
+        return True
+    return None
+
+
+def _true_fails_else_unknown(value: Any) -> bool | None:
+    return False if value is True else None
+
+
+def derive_checklist_facts(
+    request: Mapping[str, Any],
+    verified_facts: Mapping[str, Any] | None = None,
+) -> dict[str, bool | None]:
+    """Apply checklist criteria only when questionnaire data proves the result.
+
+    Criteria that the requester questionnaire cannot establish remain unresolved.
+    They must never be converted into requester-facing checklist questions or
+    silently treated as passing.
+    """
+
+    raw_intake = request.get("erpm_intake", {})
+    intake = raw_intake if isinstance(raw_intake, Mapping) else {}
+    raw_material_types = intake.get("material_types", [])
+    material_types = (
+        raw_material_types if isinstance(raw_material_types, list) else []
+    )
+
+    no_human_materials: bool | None
+    clinical_data_shared = intake.get("clinical_health_data_shared")
+    if HUMAN_MATERIAL_TYPE in material_types or clinical_data_shared is True:
+        no_human_materials = False
+    elif material_types and clinical_data_shared is False:
+        no_human_materials = True
+    else:
+        no_human_materials = None
+
+    safe_handling = _all_false(
+        intake.get("dangerous_to_handle_store_or_use"),
+        intake.get("hazardous_chemical_capacity_constraint"),
+    )
+    no_heightened_ehs_risk = _all_false(
+        intake.get("radioactive"),
+        intake.get("dangerous_to_handle_store_or_use"),
+        intake.get("hazardous_chemical_capacity_constraint"),
+    )
+    has_biological_material = any(
+        isinstance(material_type, str)
+        and MATERIAL_TYPE_TO_CATEGORY.get(material_type) == "biological"
+        for material_type in material_types
+    )
+
+    facts: dict[str, bool | None] = {
+        "recipient_is_us_nonprofit": None,
+        "um_owned_without_third_party_restrictions": None,
+        "internal_noncommercial_research_only": None,
+        "not_invention_report_patented_or_encumbered": _true_fails_else_unknown(
+            intake.get("previously_invention_report_or_licensed")
+        ),
+        "no_funding_restrictions": None,
+        "no_human_subjects_materials_or_data": no_human_materials,
+        "not_controlled_beyond_ear99": _inverse_boolean(
+            intake.get("export_controlled")
+        ),
+        "return_not_required": _inverse_boolean(intake.get("return_required")),
+        "chemical_no_heightened_ehs_risk": no_heightened_ehs_risk,
+        "chemical_not_used_in_humans": None,
+        "biological_nonradioactive": _inverse_boolean(intake.get("radioactive")),
+        "biological_material_definition_met": (
+            True if has_biological_material else None
+        ),
+        "biological_safe_handling_storage_use": safe_handling,
+        "device_not_clinical_or_diagnostic": None,
+        "device_not_used_in_humans": None,
+        "device_no_embedded_third_party_ip": None,
+        "animal_no_live_animals": None,
+        "animal_no_restricted_species_or_permits": None,
+        "animal_nonliving_derivative_definition_met": None,
+    }
+    trusted = verified_facts if isinstance(verified_facts, Mapping) else {}
+    for field_id, value in facts.items():
+        verified_value = trusted.get(field_id)
+        if verified_value is False:
+            facts[field_id] = False
+        elif value is None and verified_value is True:
+            facts[field_id] = verified_value
+    return facts
+
+
+def evaluate_eligibility(
+    request: Mapping[str, Any],
+    verified_facts: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     request = normalize_request(request)
     raw_categories = request.get("material_categories", [])
     categories = raw_categories if isinstance(raw_categories, list) else []
-    raw_answers = request.get("eligibility_answers", {})
-    answers = raw_answers if isinstance(raw_answers, Mapping) else {}
+    answers = derive_checklist_facts(request, verified_facts)
 
     requested_sections = {
         CATEGORY_TO_SECTION[category]

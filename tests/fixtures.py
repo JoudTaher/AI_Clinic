@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 
-GENERAL_ANSWERS = {
+VERIFIED_GENERAL_FACTS = {
     "recipient_is_us_nonprofit": True,
     "um_owned_without_third_party_restrictions": True,
     "internal_noncommercial_research_only": True,
@@ -14,24 +14,24 @@ GENERAL_ANSWERS = {
     "return_not_required": True,
 }
 
-BIOLOGICAL_ANSWERS = {
+VERIFIED_BIOLOGICAL_FACTS = {
     "biological_nonradioactive": True,
     "biological_material_definition_met": True,
     "biological_safe_handling_storage_use": True,
 }
 
-CHEMICAL_ANSWERS = {
+VERIFIED_CHEMICAL_FACTS = {
     "chemical_no_heightened_ehs_risk": True,
     "chemical_not_used_in_humans": True,
 }
 
-DEVICE_ANSWERS = {
+VERIFIED_DEVICE_FACTS = {
     "device_not_clinical_or_diagnostic": True,
     "device_not_used_in_humans": True,
     "device_no_embedded_third_party_ip": True,
 }
 
-ANIMAL_ANSWERS = {
+VERIFIED_ANIMAL_FACTS = {
     "animal_no_live_animals": True,
     "animal_no_restricted_species_or_permits": True,
     "animal_nonliving_derivative_definition_met": True,
@@ -99,15 +99,6 @@ COMPLETE_ERPM_INTAKE = {
 
 
 def request_for(*categories: str) -> dict:
-    answers = dict(GENERAL_ANSWERS)
-    if "biological" in categories:
-        answers.update(BIOLOGICAL_ANSWERS)
-    if "chemical" in categories:
-        answers.update(CHEMICAL_ANSWERS)
-    if "device" in categories:
-        answers.update(DEVICE_ANSWERS)
-    if "animal_derived" in categories:
-        answers.update(ANIMAL_ANSWERS)
     intake = deepcopy(COMPLETE_ERPM_INTAKE)
     if categories == ("chemical",):
         intake["material_types"] = ["Chemical compound"]
@@ -132,9 +123,21 @@ def request_for(*categories: str) -> dict:
         ]
     return {
         "erpm_intake": intake,
-        "eligibility_answers": answers,
         "agreement_information": deepcopy(COMPLETE_AGREEMENT_INFORMATION),
     }
+
+
+def verified_facts_for(*categories: str) -> dict[str, bool]:
+    facts = dict(VERIFIED_GENERAL_FACTS)
+    if "biological" in categories:
+        facts.update(VERIFIED_BIOLOGICAL_FACTS)
+    if "chemical" in categories:
+        facts.update(VERIFIED_CHEMICAL_FACTS)
+    if "device" in categories:
+        facts.update(VERIFIED_DEVICE_FACTS)
+    if "animal_derived" in categories:
+        facts.update(VERIFIED_ANIMAL_FACTS)
+    return facts
 
 
 def plasmid_request() -> dict:
@@ -143,7 +146,17 @@ def plasmid_request() -> dict:
 
 def human_samples_request() -> dict:
     request = request_for("biological")
-    request["eligibility_answers"]["no_human_subjects_materials_or_data"] = False
+    request["erpm_intake"]["material_types"] = [
+        "Human derived materials (isolated tissue, samples, specimens, cells, etc.)"
+    ]
+    request["erpm_intake"].update(
+        {
+            "human_derived_description": "Skin tissue",
+            "human_data_classification": "De-identified",
+            "irb_study_number": "HUM00000001",
+            "protocol_consent_transfer_sections": "Section 4 permits transfer",
+        }
+    )
     return request
 
 

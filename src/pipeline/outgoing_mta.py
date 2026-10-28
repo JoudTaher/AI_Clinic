@@ -39,19 +39,29 @@ class OutgoingMTAPipeline:
         sender: AgreementSender,
         store: PipelineStore | None = None,
         catalog: Sequence[TemplateDefinition] | None = None,
+        verified_facts: Mapping[str, Any] | None = None,
     ) -> None:
         self.renderer = renderer
         self.sender = sender
         self.store = store or InMemoryPipelineStore()
         self.catalog = tuple(catalog or load_template_catalog())
+        self.verified_facts = {
+            key: value
+            for key, value in (verified_facts or {}).items()
+            if isinstance(key, str) and isinstance(value, bool)
+        }
 
     def run(
         self,
         request: Mapping[str, Any],
     ) -> PipelineResult:
         request = normalize_request(request)
+        submission_basis = {
+            "request": request,
+            "verified_facts": self.verified_facts,
+        }
         serialized_request = json.dumps(
-            request,
+            submission_basis,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -74,7 +84,7 @@ class OutgoingMTAPipeline:
                 audit_events=("intake_checked",),
             )
 
-        eligibility = evaluate_eligibility(request)
+        eligibility = evaluate_eligibility(request, self.verified_facts)
         selection = select_template(request, eligibility, self.catalog)
         selected_template = selection["selected_template"]
         audit = ("intake_checked", "eligibility_screened", "template_evaluated")

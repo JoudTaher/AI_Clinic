@@ -6,7 +6,6 @@ import streamlit as st
 
 from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.adapters.signnow_package_sender import SignNowPackageSender
-from src.eligibility import CATEGORY_TO_SECTION, SECTION_CRITERIA
 from src.materials import (
     HUMAN_MATERIAL_TYPE,
     MATERIAL_TYPES,
@@ -21,26 +20,9 @@ st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", la
 ANSWER_OPTIONS = ("Not answered", "Yes", "No")
 ANSWER_VALUES = {"Not answered": None, "Yes": True, "No": False}
 
-SECTION_TITLES = {
-    "A": "A General Eligibility",
-    "B": "B Chemical Materials",
-    "C": "C Biological Materials",
-    "D": "D Devices",
-    "E": "E Animal Materials",
-}
-
-
 def answer_input(label: str, key: str, help_text: str | None = None) -> bool | None:
     answer = st.selectbox(label, ANSWER_OPTIONS, key=key, help=help_text)
     return ANSWER_VALUES[answer]
-
-
-def checklist_input(label: str, field_id: str) -> bool | None:
-    return answer_input(
-        label,
-        key=f"eligibility_{field_id}",
-        help_text="Select Yes only when this checklist statement is true.",
-    )
 
 
 def show_check_list(title: str, items: list[dict]) -> None:
@@ -53,11 +35,10 @@ def show_check_list(title: str, items: list[dict]) -> None:
 
 
 st.title("Outgoing MTA Automation Proof of Concept")
-st.caption("Questionnaire → automatic-approval checklist → agreement → signing package")
+st.caption("Questionnaire → backend eligibility rules → agreement → signing package")
 st.write(
     "The requester questionnaire follows the supplied outgoing MTA form. "
-    "The eligibility checklist is evaluated separately to determine whether the "
-    "request qualifies for automatic approval."
+    "The supplied eligibility checklist runs only in the backend."
 )
 
 st.subheader("Introduction")
@@ -194,32 +175,6 @@ related_details = st.text_area("Other Relevant Details")
 
 selected_categories = derive_material_categories(material_types)
 
-st.subheader("Automatic Approval Eligibility Checklist")
-st.caption(
-    "All statements in General Eligibility and every applicable material section "
-    "must be true for automatic approval."
-)
-eligibility_answers: dict[str, bool | None] = {}
-st.markdown(f"#### {SECTION_TITLES['A']}")
-for criterion in SECTION_CRITERIA["A"]:
-    eligibility_answers[criterion.field_id] = checklist_input(
-        criterion.label, criterion.field_id
-    )
-
-applicable_sections = [
-    section
-    for section in ("B", "C", "D", "E")
-    if any(CATEGORY_TO_SECTION.get(category) == section for category in selected_categories)
-]
-if not applicable_sections:
-    st.info("Select a supported material type to show its applicable checklist section.")
-for section in applicable_sections:
-    st.markdown(f"#### {SECTION_TITLES[section]}")
-    for criterion in SECTION_CRITERIA[section]:
-        eligibility_answers[criterion.field_id] = checklist_input(
-            criterion.label, criterion.field_id
-        )
-
 st.subheader("Agreement and Signing Information")
 st.caption(
     "Complete this information only for generating and signing the agreement after "
@@ -317,7 +272,6 @@ if submitted:
     }
     request = {
         "erpm_intake": erpm_intake,
-        "eligibility_answers": eligibility_answers,
         "agreement_information": {
             "recipient_institution_address": recipient_institution_address,
             "recipient_scientist_title": recipient_scientist_title,

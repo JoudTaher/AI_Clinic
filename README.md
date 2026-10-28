@@ -1,6 +1,6 @@
 # Outgoing MTA Automation Proof of Concept
 
-This local Streamlit app separates the outgoing MTA requester questionnaire from the automatic-approval checklist. A complete standard request is mapped to the correct supplied agreement, populated, and packaged for U-M SignNow. The app makes no network requests.
+This local Streamlit app presents only the outgoing MTA requester questionnaire. The automatic-approval checklist runs as backend rules; it is not a second requester form. A verified standard request is mapped to the correct supplied agreement, populated, and packaged for U-M SignNow. The app makes no network requests.
 
 ## Run
 
@@ -52,4 +52,4 @@ cd /Users/joudtaher/Documents/AI_Clinic
 
 ## Current boundary
 
-The app creates a populated agreement and a local signing manifest. It does not upload to SignNow, send email, sign documents, or connect to eRPM. The relevant PI is assigned as the provider signer under the delegation stated in the supplied eligibility checklist.
+The app creates a populated agreement and a local signing manifest. It does not upload to SignNow, send email, sign documents, or connect to eRPM. Checklist facts that cannot be proven from the questionnaire require a trusted backend verification source; without one, the request routes to eRPM. The relevant PI is assigned as the provider signer under the delegation stated in the supplied eligibility checklist.

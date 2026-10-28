@@ -24,9 +24,12 @@ DELIVERY_POLICY = {
 }
 
 
-def build_screening_report(request: Mapping[str, Any]) -> dict[str, Any]:
+def build_screening_report(
+    request: Mapping[str, Any],
+    verified_facts: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     request = normalize_request(request)
-    eligibility = evaluate_eligibility(request)
+    eligibility = evaluate_eligibility(request, verified_facts)
     raw_intake = request.get("erpm_intake", {})
     erpm_intake = dict(raw_intake) if isinstance(raw_intake, Mapping) else {}
     return {

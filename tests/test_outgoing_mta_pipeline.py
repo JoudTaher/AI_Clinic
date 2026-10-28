@@ -3,7 +3,7 @@ from pathlib import Path
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
 from src.pipeline.ports import AgreementRenderError, DeliveryError
-from tests.fixtures import request_for
+from tests.fixtures import request_for, verified_facts_for
 
 
 class RecordingRenderer:
@@ -50,7 +50,17 @@ class FailingRenderer:
 def pipeline_with_recorders():
     renderer = RecordingRenderer()
     sender = RecordingSender()
-    return OutgoingMTAPipeline(renderer, sender), renderer, sender
+    return (
+        OutgoingMTAPipeline(
+            renderer,
+            sender,
+            verified_facts=verified_facts_for(
+                "chemical", "biological", "animal_derived", "device"
+            ),
+        ),
+        renderer,
+        sender,
+    )
 
 
 def test_mixed_material_request_routes_to_erpm_before_rendering():
@@ -257,7 +267,11 @@ def test_semantically_identical_questionnaires_share_submission_id():
 def test_delivery_adapter_failure_is_reported_without_marking_complete():
     renderer = RecordingRenderer()
     sender = FailingSender()
-    pipeline = OutgoingMTAPipeline(renderer, sender)
+    pipeline = OutgoingMTAPipeline(
+        renderer,
+        sender,
+        verified_facts=verified_facts_for("chemical"),
+    )
 
     result = pipeline.run(request_for("chemical"))
 
@@ -270,7 +284,11 @@ def test_delivery_adapter_failure_is_reported_without_marking_complete():
 
 def test_rendering_failure_is_reported_without_calling_sender():
     sender = RecordingSender()
-    pipeline = OutgoingMTAPipeline(FailingRenderer(), sender)
+    pipeline = OutgoingMTAPipeline(
+        FailingRenderer(),
+        sender,
+        verified_facts=verified_facts_for("chemical"),
+    )
 
     result = pipeline.run(request_for("chemical"))
 

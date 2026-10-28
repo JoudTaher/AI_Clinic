@@ -1,6 +1,6 @@
 from src.agreement_readiness import evaluate_agreement_readiness
 from src.eligibility import evaluate_eligibility
-from tests.fixtures import plasmid_request, request_for
+from tests.fixtures import plasmid_request, request_for, verified_facts_for
 
 
 def test_complete_information_is_ready():
@@ -11,7 +11,10 @@ def test_complete_information_is_ready():
 def test_missing_agreement_data_does_not_change_eligibility():
     request = plasmid_request()
     request["erpm_intake"]["recipient_experimental_plan"] = ""
-    assert evaluate_eligibility(request)["status"] == "eligible"
+    assert (
+        evaluate_eligibility(request, verified_facts_for("biological"))["status"]
+        == "eligible"
+    )
     result = evaluate_agreement_readiness(request)
     assert result["status"] == "missing_information"
     assert "recipient_research_purpose" in result["missing_fields"]

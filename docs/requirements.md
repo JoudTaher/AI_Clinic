@@ -12,6 +12,8 @@ Missing questionnaire information is reported separately and does not alter chec
 
 ## Automatic approval
 
+The checklist is never displayed as requester input. The backend derives every checklist fact that the questionnaire proves directly. Facts that require institutional data are accepted only through a separate trusted backend verification input, never from the requester payload.
+
 Every request evaluates checklist Section A. Chemical, biological, device, and animal-material requests also evaluate Sections B, C, D, and E respectively.
 
 - Every applicable statement is true: eligible for automatic approval.
@@ -19,6 +21,8 @@ Every request evaluates checklist Section A. Chemical, biological, device, and a
 - Any statement is unanswered or the material category is unsupported or ambiguous: route to the Standard MTA Process.
 
 The checklist refers to Sections B through F, but the supplied checklist contains no Section F.
+
+The standalone questionnaire does not prove every checklist fact, including recipient non-profit status, U-M ownership and restrictions, and internal non-commercial use. Those facts remain unresolved and route to eRPM until an institutional verification source is connected.
 
 ## Agreement mapping
 
@@ -33,7 +37,7 @@ The combined “Other Model Organism (yeast, drosophila, zebrafish)” questionn
 
 ## Pipeline
 
-The backend follows `questionnaire completeness -> checklist eligibility -> template selection -> agreement-data completeness -> DOCX population -> signing package`.
+The backend follows `questionnaire completeness -> derive checklist facts -> apply trusted system verifications -> checklist decision -> template selection -> agreement-data completeness -> DOCX population -> signing package`.
 
 The pipeline derives an internal deterministic submission identifier from the normalized submission. It is not a requester input and is not displayed as a form field. Identical submissions do not prepare duplicate packages within one pipeline store.
 
