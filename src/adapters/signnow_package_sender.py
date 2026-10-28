@@ -7,7 +7,7 @@ import re
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from src.adapters.paths import safe_identifier
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
@@ -48,13 +48,17 @@ class SignNowPackageSender:
         roles: list[str],
         order: int,
         *,
-        require_title: bool = True,
+        title_mode: Literal["required", "optional", "omit"] = "required",
     ) -> dict[str, object]:
-        title = (
-            cls._required_text(data, f"{prefix}_title")
-            if require_title
-            else ""
-        )
+        raw_title = data.get(f"{prefix}_title", "")
+        if title_mode == "required":
+            title = cls._required_text(data, f"{prefix}_title")
+        elif title_mode == "optional":
+            if not isinstance(raw_title, str):
+                raise DeliveryError(f"Signer field must be text: {prefix}_title")
+            title = raw_title.strip()
+        else:
+            title = ""
         return {
             "email": cls._required_email(data, f"{prefix}_email"),
             "name": cls._required_text(data, f"{prefix}_name"),
@@ -67,7 +71,13 @@ class SignNowPackageSender:
     def _provider_official(
         cls, information: Mapping[str, Any], role: str
     ) -> dict[str, object]:
-        return cls._person(information, "provider_scientist", [role], 2)
+        return cls._person(
+            information,
+            "provider_scientist",
+            [role],
+            2,
+            title_mode="optional",
+        )
 
     def _signers(
         self, template_id: str, information: Mapping[str, Any]
@@ -99,7 +109,11 @@ class SignNowPackageSender:
                 scientist_roles.append("recipient_organization_certifier")
             signers = [
                 self._person(
-                    information, "recipient_scientist", scientist_roles, 1
+                    information,
+                    "recipient_scientist",
+                    scientist_roles,
+                    1,
+                    title_mode="optional",
                 )
             ]
             if not can_certify:
@@ -125,7 +139,7 @@ class SignNowPackageSender:
                     "recipient_scientist",
                     ["recipient_scientist"],
                     1,
-                    require_title=False,
+                    title_mode="omit",
                 ),
                 self._person(
                     information,

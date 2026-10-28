@@ -93,6 +93,18 @@ def test_simple_letter_does_not_require_unprinted_recipient_title_or_shipping():
     assert result["status"] == "ready"
 
 
+def test_scientist_academic_titles_are_optional_for_all_templates():
+    for category in ("chemical", "animal_derived", "biological", "device"):
+        request = request_for(category)
+        information = request["agreement_information"]
+        information["provider_scientist_title"] = ""
+        information["recipient_scientist_title"] = ""
+
+        result = evaluate_agreement_readiness(request)
+
+        assert result["status"] == "ready", category
+
+
 def test_autm_still_requires_template_shipping_slots():
     request = request_for("chemical")
     request["agreement_information"].pop("shipping_address")

@@ -118,15 +118,15 @@ def test_ubmta_uses_recipient_scientist_as_certifier_when_authorized(tmp_path: P
     assert "Alex Official" not in text
 
 
-def test_renderer_rejects_missing_required_agreement_data(tmp_path: Path):
+def test_renderer_allows_blank_optional_scientist_titles(tmp_path: Path):
     request = request_for("chemical")
     request["agreement_information"]["recipient_scientist_title"] = ""
+    request["agreement_information"]["provider_scientist_title"] = ""
     renderer = DocxAgreementRenderer(tmp_path)
 
-    with pytest.raises(AgreementDataError, match="recipient_scientist_title"):
-        renderer.render("REQ-102", template("autm_chemical"), request)
+    artifact = renderer.render("REQ-102", template("autm_chemical"), request)
 
-    assert list(tmp_path.iterdir()) == []
+    assert artifact.path.is_file()
 
 
 def test_renderer_rejects_missing_template_specific_authorized_official(

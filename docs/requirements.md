@@ -47,11 +47,11 @@ Mixed material categories never select an agreement automatically. Standard lega
 
 Agreement fields are conditional on the selected template:
 
-- AUTM Chemical and AUTM Biological: recipient organization address, both scientist titles, material description, shipping recipient/address, and recipient authorized signatory identity and signing email.
-- UBMTA Implementing Letter: recipient organization address, both scientist titles, original-material description, recipient scientist certification authority, and a separate recipient authorized official only when required.
+- AUTM Chemical and AUTM Biological: recipient organization address, optional academic/job titles for the provider and recipient scientists, material description, shipping recipient/address, and recipient authorized signatory identity and signing email.
+- UBMTA Implementing Letter: recipient organization address, optional academic/job titles for the provider and recipient scientists, original-material description, recipient scientist certification authority, and a separate recipient authorized official only when required.
 - Simple Letter Agreement: recipient organization address, material description, recipient scientist signing email, and recipient authorized official identity and signing email. It does not request an unprinted recipient-scientist title or AUTM shipping slots.
 
-Provider and recipient names, organization, and transmittal fee are reused from the requester questionnaire. Research purpose and duration remain generation context unless the selected standard template has an approved population slot; the system does not silently activate optional legal terms. The checklist-sourced shipping-payment and no-cost answers are required agreement-term validations; a conflicting answer routes for review. Signing emails are delivery data and are not printed into the agreement.
+Provider and recipient full names, organization, and transmittal fee are reused from the requester questionnaire. The agreement section displays the reused names instead of requesting duplicate name entries. A scientist title means an academic or job role (for example, Professor or Research Scientist); both scientist-title fields are optional and blank titles do not block Standard MTA processing. Research purpose and duration remain generation context unless the selected standard template has an approved population slot; the system does not silently activate optional legal terms. The checklist-sourced shipping-payment and no-cost answers are required agreement-term validations; a conflicting answer routes for review. Signing emails are delivery data and are not printed into the agreement.
 
 The combined “Other Model Organism (yeast, drosophila, zebrafish)” questionnaire option requires manual special-case review in eRPM because it does not identify one unambiguous checklist section.
 

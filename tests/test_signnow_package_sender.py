@@ -65,6 +65,23 @@ def test_ubmta_package_assigns_visible_signature_roles_and_order(tmp_path: Path)
     assert [signer["order"] for signer in manifest["signers"]] == [1, 1, 2]
 
 
+def test_signing_package_allows_optional_provider_and_recipient_titles(tmp_path: Path):
+    request = request_for("biological")
+    request["agreement_information"]["provider_scientist_title"] = ""
+    request["agreement_information"]["recipient_scientist_title"] = ""
+    sender = SignNowPackageSender(tmp_path / "signing")
+
+    receipt = sender.send(
+        "REQ-OPTIONAL-TITLES",
+        request,
+        artifact(tmp_path, "ubmta_implementing_letter"),
+    )
+
+    manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
+    assert manifest["signers"][0]["title"] == ""
+    assert manifest["signers"][-1]["title"] == ""
+
+
 def test_ubmta_combines_recipient_roles_when_scientist_can_certify(tmp_path: Path):
     request = request_for("biological")
     request["agreement_information"][

@@ -198,15 +198,30 @@ recipient_official_email = ""
 recipient_pays_shipping: bool | None = None
 material_provided_at_no_cost: bool | None = None
 if selected_category in supported_categories:
+    name_left, name_right = st.columns(2)
+    with name_left:
+        st.caption(
+            f"Provider Scientist full name: {contact_pi_name or 'Not entered above'}"
+        )
+    with name_right:
+        st.caption(
+            "Recipient Scientist full name: "
+            f"{recipient_scientist_name or 'Not entered above'}"
+        )
+
     agreement_left, agreement_right = st.columns(2)
     with agreement_left:
-        provider_scientist_title = st.text_input("Provider Scientist title")
+        provider_scientist_title = st.text_input(
+            "Provider Scientist academic/job title (if known)"
+        )
         provider_scientist_email = st.text_input(
             "Provider Scientist signing email",
             help="Used to deliver the signing request; it is not printed in the agreement.",
         )
         if selected_category in {"chemical", "animal_derived", "biological"}:
-            recipient_scientist_title = st.text_input("Recipient Scientist title")
+            recipient_scientist_title = st.text_input(
+                "Recipient Scientist academic/job title (if known)"
+            )
     with agreement_right:
         recipient_institution_address = st.text_area("Recipient Organization address")
         material_label = (

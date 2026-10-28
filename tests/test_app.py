@@ -130,6 +130,30 @@ def test_ubmta_shows_only_ubmta_template_entries():
     assert "Recipient Scientist authorized to certify for Recipient Organization?" in labels
 
 
+def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    next(item for item in app.text_input if item.label == "Contact PI").set_value(
+        "Dr. Provider"
+    )
+    next(
+        item for item in app.text_input if item.label == "Recipient Scientist Name"
+    ).set_value("Dr. Recipient")
+    next(
+        item for item in app.multiselect if item.label == "Material Type"
+    ).select("Plasmid/Vector (rDNA or SNA)")
+    app.run(timeout=10)
+
+    labels = {element.label for element in app.text_input}
+    assert "Provider Scientist academic/job title (if known)" in labels
+    assert "Recipient Scientist academic/job title (if known)" in labels
+    assert "Provider Scientist title" not in labels
+    assert "Recipient Scientist title" not in labels
+    captions = [item.value for item in app.caption]
+    assert "Provider Scientist full name: Dr. Provider" in captions
+    assert "Recipient Scientist full name: Dr. Recipient" in captions
+
+
 def test_autm_shows_autm_shipping_and_signatory_entries():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
@@ -165,7 +189,7 @@ def test_simple_letter_omits_autm_only_fields():
         for element in group
     }
     assert "Material description" in labels
-    assert "Recipient Scientist title" not in labels
+    assert "Recipient Scientist academic/job title (if known)" not in labels
     assert "Shipping recipient name" not in labels
     assert "Shipping address" not in labels
     assert "Recipient Authorized Official name" in labels
@@ -186,6 +210,6 @@ def test_mixed_selection_hides_all_template_specific_agreement_inputs():
         for group in (app.text_input, app.text_area, app.selectbox)
         for element in group
     }
-    assert "Provider Scientist title" not in labels
+    assert "Provider Scientist academic/job title (if known)" not in labels
     assert "Material description" not in labels
     assert "Shipping address" not in labels

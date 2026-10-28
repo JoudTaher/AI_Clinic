@@ -11,7 +11,6 @@ COMMON_REQUIRED_TEXT_FIELDS = (
     "recipient_scientist_name",
     "recipient_scientist_email",
     "provider_scientist_name",
-    "provider_scientist_title",
     "provider_scientist_email",
     "material_description",
     "recipient_research_purpose",
@@ -19,12 +18,9 @@ COMMON_REQUIRED_TEXT_FIELDS = (
 )
 
 AUTM_REQUIRED_TEXT_FIELDS = (
-    "recipient_scientist_title",
     "shipping_recipient_name",
     "shipping_address",
 )
-
-UBMTA_REQUIRED_TEXT_FIELDS = ("recipient_scientist_title",)
 
 RECIPIENT_OFFICIAL_FIELDS = (
     "recipient_authorized_official_name",
@@ -77,7 +73,6 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
     elif category == "device":
         missing_fields.extend(_missing_text(information, RECIPIENT_OFFICIAL_FIELDS))
     elif category == "biological":
-        missing_fields.extend(_missing_text(information, UBMTA_REQUIRED_TEXT_FIELDS))
         can_certify = information.get("recipient_scientist_can_certify_organization")
         if not isinstance(can_certify, bool):
             missing_fields.append("recipient_scientist_can_certify_organization")
