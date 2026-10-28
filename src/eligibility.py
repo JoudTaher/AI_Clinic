@@ -172,16 +172,10 @@ def _recipient_nonprofit_fact(intake: Mapping[str, Any]) -> bool | None:
         )
     ):
         return True
-    for field_id in (
-        "recipient_scientist_email",
-        "recipient_administrative_contact_email",
+    if "department" in normalized and any(
+        marker in normalized for marker in ("research", "medicine", "medical")
     ):
-        email = intake.get(field_id)
-        if not isinstance(email, str):
-            continue
-        _, separator, domain = email.strip().casefold().rpartition("@")
-        if separator and domain.endswith((".edu", ".gov")):
-            return True
+        return True
     return None
 
 

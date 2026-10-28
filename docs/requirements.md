@@ -28,7 +28,7 @@ Structured proxies are limited to the checklist comparison documented by the sup
 
 The general checklist rules use the submitted questionnaire as follows:
 
-- A domestic destination plus either a recipient name identifying a university, college, non-profit, or research organization, or a recipient scientist/administrative-contact email ending in the U.S. institutional `.edu` or `.gov` domains, satisfies the U.S. non-profit rule. A foreign destination or company/corporate entity fails it; an unrecognized entity without that institutional evidence remains unresolved.
+- A domestic destination plus a recipient name identifying a university, college, non-profit, research organization/institute, or research/medicine department satisfies the U.S. non-profit rule. A foreign destination or company/corporate entity fails it; an unrecognized entity remains unresolved. Email domains are not used for this eligibility decision; authentication and institutional verification are separate future concerns.
 - “No” to materials made using another party's or commercially purchased materials satisfies the ownership/no-third-party-restrictions rule. “Yes” requires review unless other evidence explicitly resolves the restriction.
 - “No” to purchasing a product/service, a qualifying non-profit recipient, and a completed recipient experimental plan satisfy the internal non-commercial-research rule. Explicit commercial or product-development language overrides that result and fails the rule.
 - “No” to the prior U-M invention-report/licensing question satisfies the invention-report/patent/encumbrance rule. “Yes” fails it.

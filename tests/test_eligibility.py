@@ -186,13 +186,13 @@ def test_domestic_university_name_satisfies_nonprofit_institution_rule():
     assert "recipient_is_us_nonprofit" in ids(result["passed_checks"])
 
 
-def test_us_institutional_email_satisfies_nonprofit_rule_for_department_name():
+def test_research_department_request_passes_without_email_domain_inference():
     request = plasmid_request()
     request["erpm_intake"].update(
         {
             "recipient_entity": "Research and medicine department",
-            "recipient_scientist_email": "scientist@nih.gov",
-            "recipient_administrative_contact_email": "admin@nih.gov",
+            "recipient_scientist_email": "scientist@example.com",
+            "recipient_administrative_contact_email": "admin@example.com",
             "leaving_country": False,
             "paying_for_material_as_product_or_service": False,
             "recipient_experimental_plan": "Research in the medicine department",
@@ -207,6 +207,26 @@ def test_us_institutional_email_satisfies_nonprofit_rule_for_department_name():
     passed = ids(result["passed_checks"])
     assert "recipient_is_us_nonprofit" in passed
     assert "internal_noncommercial_research_only" in passed
+
+
+def test_email_domain_alone_does_not_establish_nonprofit_status():
+    request = plasmid_request()
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "Unspecified recipient",
+            "recipient_scientist_email": "scientist@nih.gov",
+            "recipient_administrative_contact_email": "admin@nih.gov",
+            "leaving_country": False,
+            "paying_for_material_as_product_or_service": False,
+            "recipient_experimental_plan": "Research",
+            "related_details": "",
+        }
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "needs_review"
+    assert "recipient_is_us_nonprofit" in ids(result["missing_information"])
 
 
 def test_completed_original_form_style_plasmid_request_is_eligible():
