@@ -269,6 +269,31 @@ def test_research_department_request_passes_without_email_domain_inference():
     assert "internal_noncommercial_research_only" in passed
 
 
+def test_domestic_noncommercial_nih_chemical_request_passes_eligibility():
+    request = request_for("chemical")
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "NIH",
+            "leaving_country": False,
+            "paying_for_material_as_product_or_service": False,
+            "recipient_experimental_plan": "Experiments for chemistry students.",
+            "radioactive": False,
+            "dangerous_to_handle_store_or_use": False,
+            "hazardous_chemical_capacity_constraint": False,
+            "related_details": "",
+        }
+    )
+    request["agreement_information"]["material_description"] = (
+        "Chemical compounds such as NaCl"
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "eligible"
+    assert result["failed_checks"] == []
+    assert result["missing_information"] == []
+
+
 def test_email_domain_alone_does_not_establish_nonprofit_status():
     request = plasmid_request()
     request["erpm_intake"].update(

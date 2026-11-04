@@ -1,0 +1,37 @@
+[theme]
+base = "light"
+
+# University of Michigan signature colors.
+primaryColor = "#00274C"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F2F2"
+textColor = "#00274C"
+linkColor = "#2F65A7"
+
+# University of Michigan supporting colors used by native status elements.
+redColor = "#9A3324"
+orangeColor = "#D86018"
+yellowColor = "#FFCB05"
+greenColor = "#75988D"
+blueColor = "#2F65A7"
+
+yellowTextColor = "#00274C"
+greenTextColor = "#00274C"
+
+chartCategoricalColors = [
+  "#00274C",
+  "#FFCB05",
+  "#2F65A7",
+  "#00B2A9",
+  "#75988D",
+  "#D86018",
+  "#9A3324",
+  "#A5A508",
+]
+
+dataframeHeaderBackgroundColor = "#00274C"
+dataframeHeaderTextColor = "#FFFFFF"
+borderColor = "#B9C6D0"
+baseRadius = "8px"
+buttonRadius = "8px"
+showWidgetBorder = true

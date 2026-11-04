@@ -267,7 +267,15 @@ will_deposit_in_repository = answer_input(
 
 recipient_left, recipient_right = st.columns(2)
 with recipient_left:
-    recipient_entity = required_text_input("Recipient Entity", "recipient_entity")
+    recipient_entity = required_text_input(
+        "Recipient Entity full name",
+        "recipient_entity",
+        help=(
+            "Enter the recipient's complete institution or organization name. "
+            "For a university department, include the university name; for example, "
+            "Department of Chemistry, University of Michigan."
+        ),
+    )
     recipient_scientist_name = required_text_input(
         "Recipient Scientist Name", "recipient_scientist_name"
     )

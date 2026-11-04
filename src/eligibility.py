@@ -126,7 +126,6 @@ def _derive_checklist_assessment(
         if paying_as_product is True
         else True
         if paying_as_product is False
-        and _recipient_nonprofit_fact(intake) is True
         and isinstance(intake.get("recipient_experimental_plan"), str)
         and bool(intake["recipient_experimental_plan"].strip())
         else None

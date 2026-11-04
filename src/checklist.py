@@ -4,18 +4,22 @@ from src.models import Criterion, SemanticLabels
 
 
 HUMAN_USE_LABELS = SemanticLabels(
+    satisfied="non-human laboratory or educational research",
+    violated=(
+        "clinical, diagnostic, therapeutic, or experimental use in or on humans"
+    ),
+    unknown="unclear whether humans are involved",
+)
+
+RECIPIENT_ORGANIZATION_LABELS = SemanticLabels(
     satisfied=(
-        "research not involving administration or application of the material "
-        "to human subjects"
+        "a United States nonprofit, government, university, college, or research "
+        "organization"
     ),
     violated=(
-        "research involving administration or application of the material to "
-        "human subjects"
+        "a commercial for-profit company or an organization outside the United States"
     ),
-    unknown=(
-        "insufficient information to determine whether the material is used in "
-        "human subjects"
-    ),
+    unknown="unclear organization type or country",
 )
 
 ANIMAL_DERIVATIVE_LABELS = SemanticLabels(
@@ -38,6 +42,7 @@ SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
             "Material is being sent from UM to a U.S. non-profit institution (e.g., university, college, non-profit, or research organization)",
             "A",
             ("recipient_entity", "related_details"),
+            RECIPIENT_ORGANIZATION_LABELS,
         ),
         Criterion(
             "um_owned_without_third_party_restrictions",

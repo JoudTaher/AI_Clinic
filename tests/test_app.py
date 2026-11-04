@@ -28,7 +28,8 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert "Copy data from an existing UFA record?" not in labels
     assert "Project Title *" in labels
     assert "Material Type *" in labels
-    assert "Recipient Entity *" in labels
+    assert "Recipient Entity full name *" in labels
+    assert "Recipient Entity *" not in labels
     assert "Recipient Scientist Email *" in labels
     assert "Contact PI phone" not in labels
     assert "Contact PI email" not in labels
