@@ -1,6 +1,8 @@
+import pytest
+
 from src.input_usage import build_input_usage
 from src.request_normalization import normalize_request
-from tests.fixtures import plasmid_request
+from tests.fixtures import plasmid_request, request_for
 
 
 def test_every_submitted_input_has_an_explicit_backend_use():
@@ -15,9 +17,21 @@ def test_every_submitted_input_has_an_explicit_backend_use():
     assert all(item["uses"] for item in usage["agreement_information"].values())
 
 
+@pytest.mark.parametrize(
+    "category", ["chemical", "animal_derived", "biological", "device"]
+)
+def test_every_supported_template_request_has_no_silently_ignored_input(category: str):
+    request = normalize_request(request_for(category))
+    usage = build_input_usage(request)
+
+    all_items = [*usage["erpm_intake"].values(), *usage["agreement_information"].values()]
+    assert all("unmapped_input" not in item["uses"] for item in all_items)
+
+
 def test_semantic_inputs_are_identified_in_the_audit_map():
     usage = build_input_usage(normalize_request(plasmid_request()))
 
+    assert "semantic_eligibility" in usage["erpm_intake"]["project_title"]["uses"]
     assert "semantic_eligibility" in usage["erpm_intake"][
         "recipient_experimental_plan"
     ]["uses"]

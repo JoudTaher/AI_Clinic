@@ -5,7 +5,11 @@ from typing import Any
 
 
 ERPM_FIELD_USES: dict[str, tuple[str, ...]] = {
-    "project_title": ("intake_completeness", "audit_record"),
+    "project_title": (
+        "intake_completeness",
+        "semantic_eligibility",
+        "audit_record",
+    ),
     "paying_for_material_as_product_or_service": (
         "intake_completeness",
         "eligibility_rule",

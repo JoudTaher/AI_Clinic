@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from src.field_validation import email_errors
 from src.materials import HUMAN_MATERIAL_TYPE, valid_material_type_selection
 from src.request_normalization import normalize_request
 
@@ -98,7 +99,21 @@ def evaluate_intake_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
         missing_fields.append("innovation_partnerships_file_number")
 
     unique_missing = list(dict.fromkeys(missing_fields))
+    validation_errors = email_errors(
+        intake,
+        {
+            "recipient_scientist_email": "Recipient Scientist Email",
+            "recipient_administrative_contact_email": (
+                "Recipient Administrative Contact Email"
+            ),
+        },
+    )
     return {
-        "status": "missing_information" if unique_missing else "ready",
+        "status": (
+            "missing_information"
+            if unique_missing or validation_errors
+            else "ready"
+        ),
         "missing_fields": unique_missing,
+        "validation_errors": validation_errors,
     }

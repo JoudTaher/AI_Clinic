@@ -104,17 +104,20 @@ COMPLETE_ERPM_INTAKE = {
 def request_for(*categories: str) -> dict:
     intake = deepcopy(COMPLETE_ERPM_INTAKE)
     if categories == ("chemical",):
+        intake["project_title"] = "Synthetic compound transfer"
         intake["material_types"] = ["Chemical compound"]
         intake["recipient_experimental_plan"] = (
             "Internal, non-commercial laboratory research only. "
             "The material will not be used in humans."
         )
     elif categories == ("animal_derived",):
+        intake["project_title"] = "Fixed mouse tissue transfer"
         intake["material_types"] = ["Mouse/Rat"]
         intake["recipient_experimental_plan"] = (
             "Internal, non-commercial laboratory research only."
         )
     elif categories == ("device",):
+        intake["project_title"] = "Prototype research device transfer"
         intake["material_types"] = ["Device"]
         intake["recipient_experimental_plan"] = (
             "Research use only. Not for use in humans or for clinical or diagnostic use."
@@ -140,6 +143,10 @@ def request_for(*categories: str) -> dict:
             "Fixed, non-living mouse tissue samples; no live animals, no restricted "
             "species, and no special permits are involved."
         )
+    elif categories == ("chemical",):
+        agreement["material_description"] = "Synthetic research compound C-101"
+    elif categories == ("device",):
+        agreement["material_description"] = "Prototype benchtop research device"
     if categories == ("biological",):
         agreement.pop("shipping_recipient_name")
         agreement.pop("shipping_address")

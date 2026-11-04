@@ -32,6 +32,7 @@ Requests meeting every applicable checklist criterion qualify for Standard MTA a
 
 ```text
 src/intake.py                 requester-questionnaire completeness
+src/field_validation.py       shared field-format validation
 src/eligibility.py            automatic-approval checklist rules
 src/semantic_rules.py         conservative free-text checklist matching
 src/input_usage.py            per-field backend consumer audit map

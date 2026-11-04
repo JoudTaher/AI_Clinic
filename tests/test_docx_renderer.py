@@ -28,10 +28,32 @@ def document_text(path: Path) -> str:
     return "\n".join(values)
 
 
+def signature_field_codes(path: Path) -> list[str]:
+    with ZipFile(path) as package:
+        root = etree.fromstring(package.read("word/document.xml"))
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    signature_table = root.xpath(".//w:tbl", namespaces=namespace)[3]
+    return [
+        (node.text or "").strip()
+        for node in signature_table.xpath(".//w:instrText", namespaces=namespace)
+    ]
+
+
+def paragraph_with_prefix(root: etree._Element, prefix: str) -> etree._Element:
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    return next(
+        paragraph
+        for paragraph in root.xpath(".//w:body/w:p", namespaces=namespace)
+        if "".join(paragraph.xpath(".//w:t/text()", namespaces=namespace))
+        .strip()
+        .startswith(prefix)
+    )
+
+
 @pytest.mark.parametrize(
     ("category", "template_id", "expected_material"),
     [
-        ("chemical", "autm_chemical", "Synthetic plasmid pExample"),
+        ("chemical", "autm_chemical", "Synthetic research compound C-101"),
         (
             "animal_derived",
             "autm_biological",
@@ -60,11 +82,16 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
     ):
         assert expected in text
     assert "Expression is faulty" not in text
+    source_signing_fields = [
+        code
+        for code in signature_field_codes(template(template_id).source_path)
+        if code == "FORMTEXT"
+    ]
+    assert signature_field_codes(artifact.path) == source_signing_fields
+    assert source_signing_fields == ["FORMTEXT"] * 6
     with ZipFile(artifact.path) as package:
         root = etree.fromstring(package.read("word/document.xml"))
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    signature_table = root.xpath(".//w:tbl", namespaces=namespace)[3]
-    assert signature_table.xpath(".//w:instrText", namespaces=namespace) == []
     populated_provider = root.xpath(".//w:tbl", namespaces=namespace)[0].xpath(
         "./w:tr", namespaces=namespace
     )[1].xpath("./w:tc", namespaces=namespace)[1]
@@ -72,6 +99,37 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
     assert set(
         populated_provider.xpath(".//w:rPr/w:sz/@w:val", namespaces=namespace)
     ) == {"18"}
+
+
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "autm_chemical"),
+        ("animal_derived", "autm_biological"),
+    ],
+)
+def test_autm_renderer_populates_and_activates_transmittal_fee_term(
+    tmp_path: Path, category: str, template_id: str
+):
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "REQ-AUTM-FEE", template(template_id), request_for(category)
+    )
+
+    with ZipFile(artifact.path) as package:
+        root = etree.fromstring(package.read("word/document.xml"))
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    exhibit_notice = paragraph_with_prefix(root, "If checked, this Agreement")
+    fee_term = paragraph_with_prefix(root, "A transmittal fee of")
+
+    assert "$125.00" in "".join(
+        fee_term.xpath(".//w:t/text()", namespaces=namespace)
+    )
+    assert exhibit_notice.xpath(
+        ".//w:checkBox/w:checked[@w:val='1']", namespaces=namespace
+    )
+    assert fee_term.xpath(
+        ".//w:checkBox/w:checked[@w:val='1']", namespaces=namespace
+    )
 
 
 def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Path):
@@ -154,7 +212,7 @@ def test_simple_letter_renderer_populates_material_parties_and_fee(tmp_path: Pat
 
     text = document_text(artifact.path)
     for expected in (
-        "Synthetic plasmid pExample",
+        "Prototype benchtop research device",
         "$125.00",
         "Dr. Provider",
         "Professor",

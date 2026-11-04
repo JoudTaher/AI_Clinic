@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from src.field_validation import email_errors
 from src.request_normalization import normalize_request
 
 COMMON_REQUIRED_TEXT_FIELDS = (
@@ -60,6 +61,7 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
         return {
             "status": "not_applicable",
             "missing_fields": [],
+            "validation_errors": {},
             "review_reasons": [
                 "Agreement fields apply only after one supported material category is selected."
             ],
@@ -67,6 +69,11 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
 
     missing_fields = _missing_text(information, COMMON_REQUIRED_TEXT_FIELDS)
 
+    requires_recipient_official = category in {
+        "chemical",
+        "animal_derived",
+        "device",
+    }
     if category in {"chemical", "animal_derived"}:
         missing_fields.extend(_missing_text(information, AUTM_REQUIRED_TEXT_FIELDS))
         missing_fields.extend(_missing_text(information, RECIPIENT_OFFICIAL_FIELDS))
@@ -77,6 +84,7 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(can_certify, bool):
             missing_fields.append("recipient_scientist_can_certify_organization")
         elif not can_certify:
+            requires_recipient_official = True
             missing_fields.extend(_missing_text(information, RECIPIENT_OFFICIAL_FIELDS))
 
     for field_id in ("recipient_pays_shipping", "material_provided_at_no_cost"):
@@ -84,12 +92,20 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
             missing_fields.append(field_id)
 
     review_reasons: list[str] = []
-    if information.get("recipient_pays_shipping") is False:
-        review_reasons.append("Recipient Scientist will not pay shipping costs.")
     if information.get("material_provided_at_no_cost") is False:
         review_reasons.append("Provider material is not supplied at no cost.")
 
-    if missing_fields:
+    email_field_labels = {
+        "recipient_scientist_email": "Recipient Scientist Email",
+        "provider_scientist_email": "Provider Scientist signing email",
+    }
+    if requires_recipient_official:
+        email_field_labels["recipient_authorized_official_email"] = (
+            "Recipient Authorized Official signing email"
+        )
+    validation_errors = email_errors(information, email_field_labels)
+
+    if missing_fields or validation_errors:
         status = "missing_information"
     elif review_reasons:
         status = "needs_review"
@@ -99,5 +115,6 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "status": status,
         "missing_fields": list(dict.fromkeys(missing_fields)),
+        "validation_errors": validation_errors,
         "review_reasons": review_reasons,
     }

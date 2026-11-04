@@ -285,7 +285,7 @@ def test_semantically_identical_questionnaires_share_submission_id():
     original = request_for("chemical")
     original["erpm_intake"]["related_document_names"] = ["a.pdf", "b.pdf"]
     equivalent = request_for("chemical")
-    equivalent["erpm_intake"]["project_title"] = "  Synthetic plasmid transfer  "
+    equivalent["erpm_intake"]["project_title"] = "  Synthetic compound transfer  "
     equivalent["erpm_intake"]["related_document_names"] = ["b.pdf", "a.pdf"]
 
     first = pipeline.run(original)

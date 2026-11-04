@@ -5,7 +5,12 @@ from tests.fixtures import plasmid_request, request_for, verified_facts_for
 
 def test_complete_information_is_ready():
     result = evaluate_agreement_readiness(plasmid_request())
-    assert result == {"status": "ready", "missing_fields": [], "review_reasons": []}
+    assert result == {
+        "status": "ready",
+        "missing_fields": [],
+        "validation_errors": {},
+        "review_reasons": [],
+    }
 
 
 def test_missing_agreement_data_does_not_change_eligibility():
@@ -70,6 +75,18 @@ def test_ubmta_scientist_certifier_does_not_require_separate_official():
     assert result["status"] == "ready"
 
 
+def test_ubmta_scientist_certifier_ignores_stale_official_email():
+    request = plasmid_request()
+    information = request["agreement_information"]
+    information["recipient_scientist_can_certify_organization"] = True
+    information["recipient_authorized_official_email"] = "stale invalid email"
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "ready"
+    assert result["validation_errors"] == {}
+
+
 def test_ubmta_does_not_require_autm_shipping_slots():
     request = plasmid_request()
     information = request["agreement_information"]
@@ -123,6 +140,7 @@ def test_agreement_readiness_is_not_applicable_without_one_supported_template():
     assert result == {
         "status": "not_applicable",
         "missing_fields": [],
+        "validation_errors": {},
         "review_reasons": [
             "Agreement fields apply only after one supported material category is selected."
         ],
@@ -137,6 +155,33 @@ def test_checklist_required_shipping_and_no_cost_answers_are_required():
 
     assert result["status"] == "missing_information"
     assert "recipient_pays_shipping" in result["missing_fields"]
+
+
+def test_recipient_not_paying_shipping_is_still_complete_standard_information():
+    request = plasmid_request()
+    request["agreement_information"]["recipient_pays_shipping"] = False
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result == {
+        "status": "ready",
+        "missing_fields": [],
+        "validation_errors": {},
+        "review_reasons": [],
+    }
+
+
+def test_invalid_signing_email_stops_agreement_preparation_with_specific_error():
+    request = plasmid_request()
+    request["agreement_information"]["provider_scientist_email"] = "provider-at-umich"
+
+    result = evaluate_agreement_readiness(request)
+
+    assert result["status"] == "missing_information"
+    assert "provider_scientist_email" not in result["missing_fields"]
+    assert result["validation_errors"] == {
+        "provider_scientist_email": "Enter a valid Provider Scientist signing email."
+    }
 
 
 def test_special_case_cost_term_requires_manual_review():

@@ -62,6 +62,105 @@ def _replace_paragraph_text(paragraph: etree._Element, value: str) -> None:
         _set_text_node(node, "")
 
 
+def _set_legacy_checkbox(paragraph: etree._Element, checked: bool) -> None:
+    checkbox = next(iter(paragraph.xpath(".//w:checkBox", namespaces=NS)), None)
+    if checkbox is None:
+        raise UnsupportedTemplateError("Expected legacy checkbox is missing")
+    for tag in ("default", "checked"):
+        state = checkbox.find(_word(tag))
+        if state is None:
+            state = etree.SubElement(checkbox, _word(tag))
+        state.set(_word("val"), "1" if checked else "0")
+
+
+def _set_legacy_text_field(paragraph: etree._Element, value: str) -> None:
+    begin = next(
+        iter(
+            paragraph.xpath(
+                "./w:r/w:fldChar[@w:fldCharType='begin'][w:ffData/w:textInput]",
+                namespaces=NS,
+            )
+        ),
+        None,
+    )
+    if begin is None:
+        raise UnsupportedTemplateError("Expected legacy text field is missing")
+
+    begin_run = begin.getparent()
+    children = list(paragraph)
+    begin_index = children.index(begin_run)
+    depth = 0
+    separate_index: int | None = None
+    end_index: int | None = None
+    for index in range(begin_index, len(children)):
+        for field_character in children[index].xpath("./w:fldChar", namespaces=NS):
+            character_type = field_character.get(_word("fldCharType"))
+            if character_type == "begin":
+                depth += 1
+            elif character_type == "separate" and depth == 1:
+                separate_index = index
+            elif character_type == "end":
+                depth -= 1
+                if depth == 0:
+                    end_index = index
+                    break
+        if end_index is not None:
+            break
+
+    if separate_index is None or end_index is None:
+        raise UnsupportedTemplateError("Legacy text field boundaries are incomplete")
+
+    result_run = etree.Element(_word("r"))
+    begin_properties = begin_run.find(_word("rPr"))
+    if begin_properties is not None:
+        result_run.append(deepcopy(begin_properties))
+    text_node = etree.SubElement(result_run, _word("t"))
+    _set_text_node(text_node, value)
+    for child in children[separate_index + 1 : end_index]:
+        paragraph.remove(child)
+    paragraph.insert(separate_index + 1, result_run)
+
+
+def _preserve_signing_fields_only(container: etree._Element) -> None:
+    """Remove malformed legacy fields while preserving intended signer inputs."""
+    for paragraph in container.xpath(".//w:p[.//w:instrText]", namespaces=NS):
+        children = list(paragraph)
+        field_stack: list[int] = []
+        top_level_start: int | None = None
+        field_ranges: list[tuple[list[etree._Element], list[str]]] = []
+
+        for index, child in enumerate(children):
+            for field_character in child.xpath("./w:fldChar", namespaces=NS):
+                character_type = field_character.get(_word("fldCharType"))
+                if character_type == "begin":
+                    if not field_stack:
+                        top_level_start = index
+                    field_stack.append(index)
+                elif character_type == "end" and field_stack:
+                    field_stack.pop()
+                    if not field_stack and top_level_start is not None:
+                        elements = children[top_level_start : index + 1]
+                        codes = [
+                            (node.text or "").strip()
+                            for element in elements
+                            for node in element.xpath(".//w:instrText", namespaces=NS)
+                        ]
+                        field_ranges.append((elements, codes))
+                        top_level_start = None
+
+        if field_stack:
+            raise UnsupportedTemplateError(
+                "A legacy field in the AUTM signing table is incomplete"
+            )
+
+        for elements, codes in reversed(field_ranges):
+            if "FORMTEXT" in codes:
+                continue
+            for element in elements:
+                if element.getparent() is paragraph:
+                    paragraph.remove(element)
+
+
 def _set_cell_text(
     cell: etree._Element,
     value: str,
@@ -215,19 +314,30 @@ class DocxAgreementRenderer:
                     value,
                     font_size_half_points=18,
                 )
-            cls._clear_form_fields(tables[3])
+            normalized_fee = data.transmittal_fee.casefold().replace(" ", "")
+            if normalized_fee not in {
+                "",
+                "n/a",
+                "na",
+                "none",
+                "no",
+                "0",
+                "0.00",
+                "$0",
+                "$0.00",
+            }:
+                exhibit_notice = cls._nth_starting(
+                    root, "If checked, this Agreement", 0
+                )
+                fee_term = cls._nth_starting(root, "A transmittal fee of", 0)
+                _set_legacy_checkbox(exhibit_notice, True)
+                _set_legacy_checkbox(fee_term, True)
+                _set_legacy_text_field(fee_term, data.transmittal_fee)
+            _preserve_signing_fields_only(tables[3])
         except IndexError as error:
             raise UnsupportedTemplateError(
                 "The AUTM template structure does not match the approved slot map"
             ) from error
-
-    @staticmethod
-    def _clear_form_fields(container: etree._Element) -> None:
-        paragraphs = container.xpath(".//w:p[.//w:instrText]", namespaces=NS)
-        for paragraph in paragraphs:
-            for child in list(paragraph):
-                if child.tag != _word("pPr"):
-                    paragraph.remove(child)
 
     @staticmethod
     def _paragraphs(root: etree._Element) -> list[etree._Element]:

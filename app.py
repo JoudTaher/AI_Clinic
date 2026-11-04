@@ -19,9 +19,143 @@ st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", la
 
 ANSWER_OPTIONS = ("Not answered", "Yes", "No")
 ANSWER_VALUES = {"Not answered": None, "Yes": True, "No": False}
+field_error_slots: dict[str, object] = {}
+
+BOOLEAN_FIELD_IDS = {
+    "paying_for_material_as_product_or_service",
+    "measurable_personnel_effort",
+    "radioactive",
+    "dangerous_to_handle_store_or_use",
+    "hazardous_chemical_capacity_constraint",
+    "will_deposit_in_repository",
+    "leaving_country",
+    "export_controlled",
+    "return_required",
+    "previously_invention_report_or_licensed",
+    "external_funding_supported_development",
+    "managed_affiliate_work",
+    "made_using_third_party_materials",
+    "clinical_health_data_shared",
+    "recipient_pays_shipping",
+    "material_provided_at_no_cost",
+    "recipient_scientist_can_certify_organization",
+}
+
+MISSING_FIELD_MESSAGES = {
+    "project_title": "Enter the project title.",
+    "contact_pi_name": "Enter the Contact PI's full name.",
+    "primary_research_administrator_name": (
+        "Enter the Primary Research Administrator's full name."
+    ),
+    "material_types": "Select at least one material type.",
+    "expected_duration": "Enter an expected duration greater than zero.",
+    "project_administrative_home": "Enter the Project Administrative Home.",
+    "recipient_entity": "Enter the Recipient Entity.",
+    "recipient_scientist_name": "Enter the Recipient Scientist's full name.",
+    "recipient_scientist_email": "Enter the Recipient Scientist's email address.",
+    "reimbursement_cost_or_fee": (
+        "Enter the reimbursement or fee, or enter None if there is none."
+    ),
+    "recipient_experimental_plan": (
+        "Describe the Recipient's experimental plan for the material."
+    ),
+    "human_derived_description": "Describe the human-derived material.",
+    "human_data_classification": "Enter the material classification.",
+    "irb_study_number": "Enter the IRB study HUM number.",
+    "protocol_consent_transfer_sections": (
+        "Enter the protocol and consent sections that allow transfer outside U-M."
+    ),
+    "innovation_partnerships_file_number": (
+        "Enter the Innovation Partnerships File Number."
+    ),
+    "recipient_institution_address": "Enter the Recipient Organization address.",
+    "provider_scientist_email": "Enter the Provider Scientist's signing email.",
+    "material_description": "Describe the material for the agreement.",
+    "shipping_recipient_name": "Enter the shipping recipient's name.",
+    "shipping_address": "Enter the shipping address.",
+    "recipient_authorized_official_name": (
+        "Enter the Recipient Authorized Official or Signatory's full name."
+    ),
+    "recipient_authorized_official_title": (
+        "Enter the Recipient Authorized Official or Signatory's title."
+    ),
+    "recipient_authorized_official_email": (
+        "Enter the Recipient Authorized Official or Signatory's signing email."
+    ),
+}
+
+ERROR_SLOT_ALIASES = {
+    "recipient_institution_name": "recipient_entity",
+    "provider_scientist_name": "contact_pi_name",
+    "recipient_research_purpose": "recipient_experimental_plan",
+    "requested_duration": "expected_duration",
+}
+
+
+def required_label(label: str) -> str:
+    return f"{label} *"
+
+
+def error_slot(field_id: str) -> None:
+    field_error_slots[field_id] = st.empty()
+
+
+def show_inline_issues(
+    missing_fields: list[str],
+    validation_errors: dict[str, str],
+    displayed_fields: set[str],
+) -> None:
+    for field_id in missing_fields:
+        slot_id = ERROR_SLOT_ALIASES.get(field_id, field_id)
+        if slot_id in displayed_fields:
+            continue
+        slot = field_error_slots.get(slot_id)
+        if slot is None:
+            continue
+        message = (
+            "Select Yes or No."
+            if field_id in BOOLEAN_FIELD_IDS
+            else MISSING_FIELD_MESSAGES.get(
+                field_id, "Complete this required field."
+            )
+        )
+        slot.error(message)
+        displayed_fields.add(slot_id)
+
+    for field_id, message in validation_errors.items():
+        slot_id = ERROR_SLOT_ALIASES.get(field_id, field_id)
+        if slot_id in displayed_fields:
+            continue
+        slot = field_error_slots.get(slot_id)
+        if slot is None:
+            continue
+        slot.error(message)
+        displayed_fields.add(slot_id)
+
+
+def required_text_input(label: str, field_id: str, **kwargs: object) -> str:
+    value = st.text_input(required_label(label), **kwargs)
+    error_slot(field_id)
+    return value
+
+
+def validated_text_input(label: str, field_id: str, **kwargs: object) -> str:
+    value = st.text_input(label, **kwargs)
+    error_slot(field_id)
+    return value
+
+
+def required_text_area(label: str, field_id: str, **kwargs: object) -> str:
+    value = st.text_area(required_label(label), **kwargs)
+    error_slot(field_id)
+    return value
+
 
 def answer_input(label: str, key: str, help_text: str | None = None) -> bool | None:
-    answer = st.selectbox(label, ANSWER_OPTIONS, key=key, help=help_text)
+    answer = st.selectbox(
+        required_label(label), ANSWER_OPTIONS, key=key, help=help_text
+    )
+    error_slot(key)
     return ANSWER_VALUES[answer]
 
 
@@ -40,12 +174,13 @@ st.write(
     "The requester questionnaire follows the supplied outgoing MTA form. "
     "The supplied eligibility checklist runs only in the backend."
 )
+st.caption("* Required field")
 
 st.subheader("Introduction")
 st.caption("Agreement Category: Material Transfer Agreement · Agreement Type: Outgoing MTA")
 intro_left, intro_right = st.columns(2)
 with intro_left:
-    project_title = st.text_input("Project Title")
+    project_title = required_text_input("Project Title", "project_title")
     paying_for_material = answer_input(
         "Are you paying for this material as a product or a service from a company?",
         "paying_for_material_as_product_or_service",
@@ -53,38 +188,49 @@ with intro_left:
     )
 with intro_right:
     duration_years = st.number_input(
-        "Expected Duration — Years", min_value=0, step=1, value=0
+        "Expected Duration — Years *", min_value=0, step=1, value=0,
+        help="Enter at least one month or one year across the duration fields.",
     )
     duration_months = st.number_input(
-        "Expected Duration — Months", min_value=0, step=1, value=0
+        "Expected Duration — Months *", min_value=0, step=1, value=0,
+        help="Enter at least one month or one year across the duration fields.",
     )
+    error_slot("expected_duration")
     duration_comments = st.text_area("Duration Comments")
 
 st.subheader("Personnel")
 personnel_left, personnel_right = st.columns(2)
 with personnel_left:
-    contact_pi_name = st.text_input("Contact PI")
+    contact_pi_name = required_text_input("Contact PI", "contact_pi_name")
 with personnel_right:
-    primary_ra_name = st.text_input("Primary Research Administrator")
+    primary_ra_name = required_text_input(
+        "Primary Research Administrator", "primary_research_administrator_name"
+    )
 measurable_personnel_effort = answer_input(
     "Is there measurable personnel effort for the project that is related to the unfunded agreement?",
     "measurable_personnel_effort",
 )
 
 st.subheader("Material Details")
-material_types = st.multiselect("Material Type", options=MATERIAL_TYPES)
+material_types = st.multiselect(required_label("Material Type"), options=MATERIAL_TYPES)
+error_slot("material_types")
 human_derived_description = ""
 human_data_classification = ""
 irb_study_number = ""
 protocol_consent_transfer_sections = ""
 if HUMAN_MATERIAL_TYPE in material_types:
-    human_derived_description = st.text_area(
-        "Human derived tissue/samples description"
+    human_derived_description = required_text_area(
+        "Human derived tissue/samples description", "human_derived_description"
     )
-    human_data_classification = st.text_area("How are these materials classified?")
-    irb_study_number = st.text_input("IRB study HUM number")
-    protocol_consent_transfer_sections = st.text_area(
-        "Protocol and informed-consent sections allowing transfer outside U-M"
+    human_data_classification = required_text_area(
+        "How are these materials classified?", "human_data_classification"
+    )
+    irb_study_number = required_text_input(
+        "IRB study HUM number", "irb_study_number"
+    )
+    protocol_consent_transfer_sections = required_text_area(
+        "Protocol and informed-consent sections allowing transfer outside U-M",
+        "protocol_consent_transfer_sections",
     )
 
 st.subheader("Material Safety")
@@ -103,19 +249,28 @@ with safety_right:
     )
 
 st.subheader("Outgoing Material Details")
-project_administrative_home = st.text_input("Project Administrative Home")
+project_administrative_home = required_text_input(
+    "Project Administrative Home", "project_administrative_home"
+)
 will_deposit_in_repository = answer_input(
     "Will the material be deposited in a repository?", "will_deposit_in_repository"
 )
 
 recipient_left, recipient_right = st.columns(2)
 with recipient_left:
-    recipient_entity = st.text_input("Recipient Entity")
-    recipient_scientist_name = st.text_input("Recipient Scientist Name")
-    recipient_scientist_email = st.text_input("Recipient Scientist Email")
+    recipient_entity = required_text_input("Recipient Entity", "recipient_entity")
+    recipient_scientist_name = required_text_input(
+        "Recipient Scientist Name", "recipient_scientist_name"
+    )
+    recipient_scientist_email = required_text_input(
+        "Recipient Scientist Email", "recipient_scientist_email"
+    )
 with recipient_right:
     recipient_admin_name = st.text_input("Recipient Administrative Contact Name")
-    recipient_admin_email = st.text_input("Recipient Administrative Contact Email")
+    recipient_admin_email = validated_text_input(
+        "Recipient Administrative Contact Email",
+        "recipient_administrative_contact_email",
+    )
     recipient_admin_street_address = st.text_input(
         "Recipient Administrative Contact Street Address"
     )
@@ -132,11 +287,14 @@ export_controlled = answer_input(
     "Are you shipping export-controlled materials, data, equipment, or software?",
     "export_controlled",
 )
-reimbursement_cost_or_fee = st.text_input(
-    "What reimbursement cost or fee, if any, will U-M request from the recipient?"
+reimbursement_cost_or_fee = required_text_input(
+    "What reimbursement cost or fee, if any, will U-M request from the recipient?",
+    "reimbursement_cost_or_fee",
+    help="Enter None if U-M will not request a reimbursement or fee.",
 )
-experimental_plan = st.text_area(
+experimental_plan = required_text_area(
     "Recipient's experimental plan for use of the material",
+    "recipient_experimental_plan",
     help="Brief description, limited to 200 words.",
 )
 return_required = answer_input(
@@ -149,8 +307,9 @@ previously_invention_report_or_licensed = answer_input(
 )
 innovation_partnerships_file_number = ""
 if previously_invention_report_or_licensed is True:
-    innovation_partnerships_file_number = st.text_input(
-        "Innovation Partnerships File Number"
+    innovation_partnerships_file_number = required_text_input(
+        "Innovation Partnerships File Number",
+        "innovation_partnerships_file_number",
     )
 external_funding_supported_development = answer_input(
     "Did an externally funded project support development of the material?",
@@ -214,8 +373,9 @@ if selected_category in supported_categories:
         provider_scientist_title = st.text_input(
             "Provider Scientist academic/job title (if known)"
         )
-        provider_scientist_email = st.text_input(
+        provider_scientist_email = required_text_input(
             "Provider Scientist signing email",
+            "provider_scientist_email",
             help="Used to deliver the signing request; it is not printed in the agreement.",
         )
         if selected_category in {"chemical", "animal_derived", "biological"}:
@@ -223,13 +383,17 @@ if selected_category in supported_categories:
                 "Recipient Scientist academic/job title (if known)"
             )
     with agreement_right:
-        recipient_institution_address = st.text_area("Recipient Organization address")
+        recipient_institution_address = required_text_area(
+            "Recipient Organization address", "recipient_institution_address"
+        )
         material_label = (
             "Original Material description"
             if selected_category == "biological"
             else "Material description"
         )
-        material_description = st.text_area(material_label)
+        material_description = required_text_area(
+            material_label, "material_description"
+        )
 
     terms_left, terms_right = st.columns(2)
     with terms_left:
@@ -247,9 +411,13 @@ if selected_category in supported_categories:
     if selected_category in {"chemical", "animal_derived"}:
         shipping_left, shipping_right = st.columns(2)
         with shipping_left:
-            shipping_recipient_name = st.text_input("Shipping recipient name")
+            shipping_recipient_name = required_text_input(
+                "Shipping recipient name", "shipping_recipient_name"
+            )
         with shipping_right:
-            shipping_address = st.text_area("Shipping address")
+            shipping_address = required_text_area(
+                "Shipping address", "shipping_address"
+            )
 
     if selected_category == "biological":
         recipient_scientist_can_certify = answer_input(
@@ -273,12 +441,17 @@ if selected_category in supported_categories:
         )
         official_left, official_middle, official_right = st.columns(3)
         with official_left:
-            recipient_official_name = st.text_input(f"{official_role} name")
+            recipient_official_name = required_text_input(
+                f"{official_role} name", "recipient_authorized_official_name"
+            )
         with official_middle:
-            recipient_official_title = st.text_input(f"{official_role} title")
+            recipient_official_title = required_text_input(
+                f"{official_role} title", "recipient_authorized_official_title"
+            )
         with official_right:
-            recipient_official_email = st.text_input(
+            recipient_official_email = required_text_input(
                 f"{official_role} signing email",
+                "recipient_authorized_official_email",
                 help="Used to deliver the signing request; it is not printed in the agreement.",
             )
 else:
@@ -375,6 +548,29 @@ if submitted:
     agreement_readiness = report["agreement_readiness"]
     template_result = report["template_selection"]
 
+    displayed_fields: set[str] = set()
+    show_inline_issues(
+        intake_readiness["missing_fields"],
+        intake_readiness["validation_errors"],
+        displayed_fields,
+    )
+    show_inline_issues(
+        agreement_readiness["missing_fields"],
+        agreement_readiness["validation_errors"],
+        displayed_fields,
+    )
+    if (
+        "Provider material is not supplied at no cost."
+        in agreement_readiness["review_reasons"]
+    ):
+        no_cost_slot = field_error_slots.get("material_provided_at_no_cost")
+        if no_cost_slot is not None:
+            no_cost_slot.warning(
+                "This answer is complete, but it requires manual special-case review "
+                "because the standard agreement templates are for no-cost transfers "
+                "apart from permitted preparation, distribution, or shipping charges."
+            )
+
     st.divider()
     st.header("Processing Result")
     if intake_readiness["status"] == "ready":
@@ -408,6 +604,9 @@ if submitted:
         st.write(agreement_readiness["status"].replace("_", " ").title())
         if agreement_readiness["missing_fields"]:
             st.write("Missing: " + ", ".join(agreement_readiness["missing_fields"]))
+        if agreement_readiness["validation_errors"]:
+            for message in agreement_readiness["validation_errors"].values():
+                st.write(message)
 
     st.markdown("**Template decision**")
     if template_result["selected_template"]:

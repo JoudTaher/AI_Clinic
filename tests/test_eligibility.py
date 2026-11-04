@@ -1,4 +1,5 @@
-from src.eligibility import evaluate_eligibility
+from src.eligibility import SECTION_CRITERIA, derive_checklist_facts, evaluate_eligibility
+from src.semantic_rules import RULES
 from tests.fixtures import (
     ids,
     human_samples_request,
@@ -16,6 +17,17 @@ def test_checklist_is_evaluated_from_questionnaire_not_caller_answers():
     result = evaluate_eligibility(request, verified_facts_for("biological"))
 
     assert "return_not_required" in ids(result["failed_checks"])
+
+
+def test_every_documented_checklist_criterion_has_one_fact_and_semantic_rule():
+    criterion_ids = {
+        criterion.field_id
+        for criteria in SECTION_CRITERIA.values()
+        for criterion in criteria
+    }
+
+    assert set(derive_checklist_facts(plasmid_request())) == criterion_ids
+    assert set(RULES) == criterion_ids
 
 
 def test_trusted_backend_facts_can_complete_unverifiable_checklist_rules():

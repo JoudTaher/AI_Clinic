@@ -77,10 +77,12 @@ class OutgoingMTAPipeline:
 
         intake_readiness = evaluate_intake_readiness(request)
         if intake_readiness["status"] == "missing_information":
+            reasons = list(intake_readiness["missing_fields"])
+            reasons.extend(intake_readiness["validation_errors"])
             return PipelineResult(
                 submission_id=submission_id,
                 status="intake_incomplete",
-                reasons=tuple(intake_readiness["missing_fields"]),
+                reasons=tuple(reasons),
                 audit_events=("intake_checked",),
             )
 
@@ -99,10 +101,10 @@ class OutgoingMTAPipeline:
 
         agreement_readiness = evaluate_agreement_readiness(request)
         if agreement_readiness["status"] == "missing_information":
-            reasons = (
-                agreement_readiness["missing_fields"]
-                or agreement_readiness["review_reasons"]
-            )
+            reasons = list(agreement_readiness["missing_fields"])
+            reasons.extend(agreement_readiness["validation_errors"])
+            if not reasons:
+                reasons.extend(agreement_readiness["review_reasons"])
             return PipelineResult(
                 submission_id=submission_id,
                 status="agreement_incomplete",
