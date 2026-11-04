@@ -79,7 +79,7 @@ class SignNowPackageSender:
             title_mode="optional",
         )
 
-    def _signers(
+    def signers_for(
         self, template_id: str, information: Mapping[str, Any]
     ) -> list[dict[str, object]]:
         if template_id in self._AUTM_TEMPLATES:
@@ -166,7 +166,7 @@ class SignNowPackageSender:
         raw_information = request.get("agreement_information", {})
         if not isinstance(raw_information, Mapping):
             raise DeliveryError("agreement_information must be an object")
-        signers = self._signers(artifact.template_id, raw_information)
+        signers = self.signers_for(artifact.template_id, raw_information)
 
         manifest = {
             "audit_events": [

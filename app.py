@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import streamlit as st
 
 from src.adapters.docx_renderer import DocxAgreementRenderer
-from src.adapters.signnow_package_sender import SignNowPackageSender
 from src.materials import (
     HUMAN_MATERIAL_TYPE,
     MATERIAL_TYPES,
@@ -13,6 +13,7 @@ from src.materials import (
 )
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
 from src.screening_report import build_screening_report, serialize_screening_report
+from src.signing import build_agreement_sender
 
 
 st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", layout="wide")
@@ -20,6 +21,14 @@ st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", la
 ANSWER_OPTIONS = ("Not answered", "Yes", "No")
 ANSWER_VALUES = {"Not answered": None, "Yes": True, "No": False}
 field_error_slots: dict[str, object] = {}
+
+
+def signnow_secrets() -> Mapping[str, object]:
+    try:
+        values = st.secrets.get("signnow", {})
+    except FileNotFoundError:
+        return {}
+    return values if isinstance(values, Mapping) else {}
 
 BOOLEAN_FIELD_IDS = {
     "paying_for_material_as_product_or_service",
@@ -459,6 +468,20 @@ else:
         "Select exactly one supported material category to show the matching agreement fields."
     )
 
+project_root = Path(__file__).resolve().parent
+agreement_sender, signing_mode = build_agreement_sender(
+    project_root, signnow_secrets()
+)
+if signing_mode == "signnow_development":
+    st.caption(
+        "Signing delivery: SignNow Development Mode. Eligible agreements will be "
+        "uploaded and sent to the listed signers."
+    )
+else:
+    st.caption(
+        "Signing delivery: local test package. No email or SignNow API request will be sent."
+    )
+
 submitted = st.button("Process request", type="primary")
 
 if submitted:
@@ -621,16 +644,22 @@ if submitted:
         for reason in template_result["review_reasons"]:
             st.caption(reason)
 
-    project_root = Path(__file__).resolve().parent
     pipeline = OutgoingMTAPipeline(
         renderer=DocxAgreementRenderer(project_root / "outputs" / "agreements"),
-        sender=SignNowPackageSender(project_root / "outputs" / "signing"),
+        sender=agreement_sender,
     )
     pipeline_result = pipeline.run(request)
 
     st.markdown("**Automation result**")
-    if pipeline_result.status == "prepared_for_signature":
-        st.success("Agreement and local SignNow package are ready.")
+    if pipeline_result.status in {"prepared_for_signature", "sent_for_signature"}:
+        if pipeline_result.status == "sent_for_signature":
+            st.success("Agreement sent through SignNow Development Mode.")
+            st.caption(
+                "SignNow document ID: "
+                + (pipeline_result.delivery_reference or "Unavailable")
+            )
+        else:
+            st.success("Agreement and local SignNow package are ready.")
         agreement_path = Path(pipeline_result.artifact_path or "")
         manifest_path = Path(pipeline_result.delivery_reference or "")
         if agreement_path.is_file():
@@ -643,7 +672,7 @@ if submitted:
                     "wordprocessingml.document"
                 ),
             )
-        if manifest_path.is_file():
+        if pipeline_result.delivery_mode == "signnow_package" and manifest_path.is_file():
             st.download_button(
                 "Download signing manifest",
                 data=manifest_path.read_text(encoding="utf-8"),

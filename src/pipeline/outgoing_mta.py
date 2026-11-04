@@ -154,6 +154,11 @@ class OutgoingMTAPipeline:
                 audit_events=approved_audit
                 + ("agreement_rendered", "delivery_failed"),
             )
+        delivery_event = (
+            "signature_invitation_sent"
+            if receipt.status == "sent_for_signature"
+            else "signing_package_prepared"
+        )
         result = PipelineResult(
             submission_id=submission_id,
             status=receipt.status,
@@ -162,7 +167,7 @@ class OutgoingMTAPipeline:
             delivery_reference=receipt.reference,
             delivery_mode=receipt.mode,
             audit_events=approved_audit
-            + ("agreement_rendered", "signing_package_prepared"),
+            + ("agreement_rendered", delivery_event),
         )
         self.store.save(result)
         return result

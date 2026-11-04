@@ -3,7 +3,9 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.streamlit/
+.streamlit/secrets.toml
+!.streamlit/
+!.streamlit/secrets.toml.example
 .superpowers/
 .agents/
 outputs/*

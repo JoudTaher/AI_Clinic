@@ -1,6 +1,6 @@
 # Outgoing MTA Automation Proof of Concept
 
-This local Streamlit app presents only the outgoing MTA requester questionnaire. The automatic-approval checklist runs as backend rules; it is not a second requester form. A verified standard request is mapped to the correct supplied agreement, populated, and packaged for U-M SignNow. The app makes no network requests.
+This local Streamlit app presents only the outgoing MTA requester questionnaire. The automatic-approval checklist runs as backend rules; it is not a second requester form. A verified standard request is mapped to the correct supplied agreement, populated, and prepared for U-M SignNow. Local package mode is the safe default; SignNow Development Mode can be explicitly enabled.
 
 ## Run
 
@@ -40,7 +40,8 @@ src/agreement_readiness.py    agreement and signing data completeness
 src/templates/                template catalog and deterministic mapping
 src/agreements/               normalized agreement data
 src/pipeline/                 workflow states and audit events
-src/adapters/                 DOCX population and SignNow package creation
+src/adapters/                 DOCX population and SignNow delivery
+src/signing/                  local-versus-API sender selection
 reference_files/              unchanged supplied checklist and templates
 ```
 
@@ -53,6 +54,10 @@ cd /Users/joudtaher/Documents/AI_Clinic
 .venv/bin/python -m pytest -q
 ```
 
-## Current boundary
+## SignNow Development Mode
 
-The app creates a populated agreement and a local signing manifest. After a Standard MTA request passes, use **Download final agreement for signing** to save the exact populated `.docx` that the signing adapter would receive. It does not upload to SignNow, send email, sign documents, or connect to eRPM. Structured answers and explicit free-text statements are compared with every applicable checklist rule using local spaCy sentence processing plus auditable phrase rules; ambiguous or conflicting text requires manual special-case review in eRPM. A trusted backend verification source can supplement institutionally verified facts. The relevant PI is assigned as the provider signer under the delegation stated in the supplied eligibility checklist.
+Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, enter the Development Mode API key and SignNow account email, then set `enabled = true`. The account email identifies the SignNow account sending the invitations; signer destination emails always come from the submitted form. Never commit `secrets.toml`.
+
+When enabled, an eligible request is populated locally, a temporary tagged copy is uploaded to SignNow, the returned signer roles are verified, and role-based invitations are sent in the template-specific order. The clean populated agreement remains downloadable. Development Mode documents are for integration testing; production activation and webhook status tracking are separate steps.
+
+The app does not connect to eRPM. Structured answers and explicit free-text statements are compared with every applicable checklist rule using local spaCy sentence processing plus auditable phrase rules; ambiguous or conflicting text requires manual special-case review.
