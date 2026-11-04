@@ -33,8 +33,9 @@ Requests meeting every applicable checklist criterion qualify for Standard MTA a
 ```text
 src/intake.py                 requester-questionnaire completeness
 src/field_validation.py       shared field-format validation
+src/checklist.py              authoritative checklist criteria and evidence scope
 src/eligibility.py            automatic-approval checklist rules
-src/semantic_rules.py         conservative free-text checklist matching
+src/semantic_classifier.py    local Hugging Face semantic classification
 src/input_usage.py            per-field backend consumer audit map
 src/agreement_readiness.py    agreement and signing data completeness
 src/templates/                template catalog and deterministic mapping
@@ -60,4 +61,4 @@ Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, enter the D
 
 When enabled, an eligible request is populated locally, a temporary tagged copy is uploaded to SignNow, the returned signer roles are verified, and role-based invitations are sent in the template-specific order. The clean populated agreement remains downloadable. Development Mode documents are for integration testing; production activation and webhook status tracking are separate steps.
 
-The app does not connect to eRPM. Structured answers and explicit free-text statements are compared with every applicable checklist rule using local spaCy sentence processing plus auditable phrase rules; ambiguous or conflicting text requires manual special-case review.
+The app does not connect to eRPM. Structured questionnaire answers are evaluated deterministically. Only checklist facts that remain unresolved are evaluated from relevant open-text fields by the local `facebook/bart-large-mnli` Hugging Face model. The model is downloaded once and cached on the device; submitted form text is not sent to an external inference service. The backend contains no regex pass/fail phrase dictionary. Low-confidence or conflicting semantic evidence requires manual special-case review.

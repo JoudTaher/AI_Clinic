@@ -1,5 +1,5 @@
-from src.eligibility import SECTION_CRITERIA, derive_checklist_facts, evaluate_eligibility
-from src.semantic_rules import RULES
+from src.checklist import SECTION_CRITERIA, all_criteria
+from src.eligibility import derive_checklist_facts, evaluate_eligibility
 from tests.fixtures import (
     ids,
     human_samples_request,
@@ -19,7 +19,7 @@ def test_checklist_is_evaluated_from_questionnaire_not_caller_answers():
     assert "return_not_required" in ids(result["failed_checks"])
 
 
-def test_every_documented_checklist_criterion_has_one_fact_and_semantic_rule():
+def test_every_documented_checklist_criterion_has_one_derived_fact():
     criterion_ids = {
         criterion.field_id
         for criteria in SECTION_CRITERIA.values()
@@ -27,7 +27,12 @@ def test_every_documented_checklist_criterion_has_one_fact_and_semantic_rule():
     }
 
     assert set(derive_checklist_facts(plasmid_request())) == criterion_ids
-    assert set(RULES) == criterion_ids
+    assert [criterion.field_id for criterion in all_criteria()] == [
+        criterion.field_id
+        for section in ("A", "B", "C", "D", "E")
+        for criterion in SECTION_CRITERIA[section]
+    ]
+    assert all(criterion.semantic_sources for criterion in all_criteria())
 
 
 def test_trusted_backend_facts_can_complete_unverifiable_checklist_rules():
@@ -103,6 +108,34 @@ def test_failed_chemical_condition_is_ineligible():
     assert "chemical_no_heightened_ehs_risk" in ids(result["failed_checks"])
 
 
+def test_commercial_experimental_plan_overrides_noncommercial_proxy():
+    request = request_for("chemical")
+    request["erpm_intake"]["paying_for_material_as_product_or_service"] = False
+    request["erpm_intake"]["recipient_experimental_plan"] = (
+        "Commercial product development for a company decision."
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "ineligible"
+    assert "internal_noncommercial_research_only" in ids(
+        result["failed_checks"]
+    )
+
+
+def test_material_name_does_not_override_structured_export_answer():
+    request = request_for("chemical")
+    request["erpm_intake"]["export_controlled"] = False
+    request["agreement_information"]["material_description"] = (
+        "Synthetic research compound C-101"
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert "not_controlled_beyond_ear99" in ids(result["passed_checks"])
+    assert "not_controlled_beyond_ear99" not in ids(result["failed_checks"])
+
+
 def test_multiple_material_categories_are_all_evaluated():
     result = evaluate_eligibility(request_for("chemical", "biological"))
     assert result["status"] == "needs_review"
@@ -146,8 +179,23 @@ def test_questionnaire_and_explicit_text_can_satisfy_documented_rules():
     assert result["status"] == "eligible"
     assert result["missing_information"] == []
     assert result["semantic_assessment"]["method"] == (
-        "spacy_sentence_scoped_phrase_rules"
+        "local_huggingface_semantic_classification"
     )
+
+
+def test_chemical_classroom_research_establishes_no_human_use():
+    request = request_for("chemical")
+    request["erpm_intake"]["project_title"] = "For test purposes only"
+    request["erpm_intake"]["recipient_experimental_plan"] = (
+        "Research in the chemistry class"
+    )
+    request["agreement_information"]["material_description"] = "Chemistry NaCl"
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "eligible"
+    assert "chemical_not_used_in_humans" in ids(result["passed_checks"])
+    assert result["missing_information"] == []
 
 
 def test_ambiguous_device_use_text_keeps_device_rules_unresolved():

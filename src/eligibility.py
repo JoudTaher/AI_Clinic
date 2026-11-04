@@ -1,128 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
+from src.checklist import CATEGORY_TO_SECTION, SECTION_CRITERIA, all_criteria
 from src.materials import HUMAN_MATERIAL_TYPE, MATERIAL_TYPE_TO_CATEGORY
-from src.models import Criterion
 from src.request_normalization import normalize_request
-from src.semantic_rules import analyze_open_text
-
-
-SECTION_CRITERIA: dict[str, tuple[Criterion, ...]] = {
-    "A": (
-        Criterion(
-            "recipient_is_us_nonprofit",
-            "Material is being sent from UM to a U.S. non-profit institution (e.g., university, college, non-profit, or research organization)",
-            "A",
-        ),
-        Criterion(
-            "um_owned_without_third_party_restrictions",
-            "Material is owned by UM and not subject to third-party restrictions",
-            "A",
-        ),
-        Criterion(
-            "internal_noncommercial_research_only",
-            "Use is limited to internal, non-commercial research (e.g., the research is not intended to inform a product, service, or company decision)",
-            "A",
-        ),
-        Criterion(
-            "not_invention_report_patented_or_encumbered",
-            "The materials are not appropriately the subject of an invention report with Innovation Partnerships, whether or not yet filed, and are not patented or otherwise encumbered",
-            "A",
-        ),
-        Criterion(
-            "no_funding_restrictions",
-            "No funding restrictions affect the transfer (e.g., a funding agreement did not pay for generation of the materials and include terms that follow the material)",
-            "A",
-        ),
-        Criterion(
-            "no_human_subjects_materials_or_data",
-            "No human subjects-derived materials or data will be included in the transfer",
-            "A",
-        ),
-        Criterion(
-            "not_controlled_beyond_ear99",
-            "Material is not a controlled substance beyond EAR99 (e.g., DEA-regulated)",
-            "A",
-        ),
-        Criterion(
-            "return_not_required",
-            "Material does not require return",
-            "A",
-        ),
-    ),
-    "B": (
-        Criterion(
-            "chemical_no_heightened_ehs_risk",
-            "Material does not pose heightened EHS risks beyond standard laboratory handling",
-            "B",
-        ),
-        Criterion(
-            "chemical_not_used_in_humans",
-            "Material will not be used in humans",
-            "B",
-        ),
-    ),
-    "C": (
-        Criterion(
-            "biological_nonradioactive",
-            "Materials are non-radioactive",
-            "C",
-        ),
-        Criterion(
-            "biological_material_definition_met",
-            "Materials consist of living organisms or contain biological molecules, such as cell lines, bacteria, fungi, viruses, and plasmids/vectors (rDNA or synthetic nucleic acids)",
-            "C",
-        ),
-        Criterion(
-            "biological_safe_handling_storage_use",
-            "Materials are safe for handling, storage, and use",
-            "C",
-        ),
-    ),
-    "D": (
-        Criterion(
-            "device_not_clinical_or_diagnostic",
-            "Device will not be used for clinical or diagnostic use",
-            "D",
-        ),
-        Criterion(
-            "device_not_used_in_humans",
-            "Device will not be used in humans",
-            "D",
-        ),
-        Criterion(
-            "device_no_embedded_third_party_ip",
-            "No embedded software, firmware, or components are subject to third-party IP restrictions",
-            "D",
-        ),
-    ),
-    "E": (
-        Criterion(
-            "animal_no_live_animals",
-            "Material does not involve live animals",
-            "E",
-        ),
-        Criterion(
-            "animal_no_restricted_species_or_permits",
-            "Material does not require restricted species or special permits",
-            "E",
-        ),
-        Criterion(
-            "animal_nonliving_derivative_definition_met",
-            "Materials consist of non-living animal derivatives, such as mouse cell lines, animal tissues or organs, fixed samples, or derivatives",
-            "E",
-        ),
-    ),
-}
-
-CATEGORY_TO_SECTION = {
-    "chemical": "B",
-    "biological": "C",
-    "device": "D",
-    "animal_derived": "E",
-}
+from src.semantic_classifier import analyze_open_text
 
 
 def _scope_issue(message: str) -> dict[str, str]:
@@ -193,8 +78,6 @@ def _derive_checklist_assessment(
     request: Mapping[str, Any],
     verified_facts: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, bool | None], dict[str, Any]]:
-
-
     """Apply checklist criteria only when questionnaire data proves the result.
 
     Criteria that the requester questionnaire cannot establish remain unresolved.
@@ -233,27 +116,6 @@ def _derive_checklist_assessment(
         for material_type in material_types
     )
 
-    raw_agreement = request.get("agreement_information", {})
-    agreement = raw_agreement if isinstance(raw_agreement, Mapping) else {}
-    semantic = analyze_open_text(
-        {
-            **{
-                field_id: intake.get(field_id, "")
-                for field_id in (
-                    "recipient_experimental_plan",
-                    "related_details",
-                    "human_derived_description",
-                    "human_data_classification",
-                    "protocol_consent_transfer_sections",
-                    "project_title",
-                    "recipient_entity",
-                )
-            },
-            "material_description": agreement.get("material_description", ""),
-        }
-    )
-    semantic_facts = semantic["facts"]
-
     third_party_materials = intake.get("made_using_third_party_materials")
     ownership_fact = True if third_party_materials is False else None
     external_funding = intake.get("external_funding_supported_development")
@@ -279,72 +141,96 @@ def _derive_checklist_assessment(
     )
     device_ip_fact = True if third_party_materials is False else None
 
-    facts: dict[str, bool | None] = {
-        "recipient_is_us_nonprofit": _merge_fact(
-            _recipient_nonprofit_fact(intake),
-            semantic_facts["recipient_is_us_nonprofit"],
+    structured_facts: dict[str, bool | None] = {
+        "recipient_is_us_nonprofit": _recipient_nonprofit_fact(intake),
+        "um_owned_without_third_party_restrictions": ownership_fact,
+        "internal_noncommercial_research_only": commercial_fact,
+        "not_invention_report_patented_or_encumbered": invention_fact,
+        "no_funding_restrictions": funding_fact,
+        "no_human_subjects_materials_or_data": no_human_materials,
+        "not_controlled_beyond_ear99": _inverse_boolean(
+            intake.get("export_controlled")
         ),
-        "um_owned_without_third_party_restrictions": _merge_fact(
-            ownership_fact,
-            semantic_facts["um_owned_without_third_party_restrictions"],
+        "return_not_required": _inverse_boolean(intake.get("return_required")),
+        "chemical_no_heightened_ehs_risk": no_heightened_ehs_risk,
+        "chemical_not_used_in_humans": None,
+        "biological_nonradioactive": _inverse_boolean(intake.get("radioactive")),
+        "biological_material_definition_met": (
+            True if has_biological_material else None
         ),
-        "internal_noncommercial_research_only": _merge_fact(
-            commercial_fact,
-            semantic_facts["internal_noncommercial_research_only"],
-        ),
-        "not_invention_report_patented_or_encumbered": _merge_fact(
-            invention_fact,
-            semantic_facts["not_invention_report_patented_or_encumbered"],
-        ),
-        "no_funding_restrictions": _merge_fact(
-            funding_fact, semantic_facts["no_funding_restrictions"]
-        ),
-        "no_human_subjects_materials_or_data": _merge_fact(
-            no_human_materials,
-            semantic_facts["no_human_subjects_materials_or_data"],
-        ),
-        "not_controlled_beyond_ear99": _merge_fact(
-            _inverse_boolean(intake.get("export_controlled")),
-            semantic_facts["not_controlled_beyond_ear99"],
-        ),
-        "return_not_required": _merge_fact(
-            _inverse_boolean(intake.get("return_required")),
-            semantic_facts["return_not_required"],
-        ),
-        "chemical_no_heightened_ehs_risk": _merge_fact(
-            no_heightened_ehs_risk,
-            semantic_facts["chemical_no_heightened_ehs_risk"],
-        ),
-        "chemical_not_used_in_humans": semantic_facts[
-            "chemical_not_used_in_humans"
-        ],
-        "biological_nonradioactive": _merge_fact(
-            _inverse_boolean(intake.get("radioactive")),
-            semantic_facts["biological_nonradioactive"],
-        ),
-        "biological_material_definition_met": _merge_fact(
-            True if has_biological_material else None,
-            semantic_facts["biological_material_definition_met"],
-        ),
-        "biological_safe_handling_storage_use": _merge_fact(
-            safe_handling,
-            semantic_facts["biological_safe_handling_storage_use"],
-        ),
-        "device_not_clinical_or_diagnostic": semantic_facts[
-            "device_not_clinical_or_diagnostic"
-        ],
-        "device_not_used_in_humans": semantic_facts["device_not_used_in_humans"],
-        "device_no_embedded_third_party_ip": _merge_fact(
-            device_ip_fact,
-            semantic_facts["device_no_embedded_third_party_ip"],
-        ),
-        "animal_no_live_animals": semantic_facts["animal_no_live_animals"],
-        "animal_no_restricted_species_or_permits": semantic_facts[
-            "animal_no_restricted_species_or_permits"
-        ],
-        "animal_nonliving_derivative_definition_met": semantic_facts[
-            "animal_nonliving_derivative_definition_met"
-        ],
+        "biological_safe_handling_storage_use": safe_handling,
+        "device_not_clinical_or_diagnostic": None,
+        "device_not_used_in_humans": None,
+        "device_no_embedded_third_party_ip": device_ip_fact,
+        "animal_no_live_animals": None,
+        "animal_no_restricted_species_or_permits": None,
+        "animal_nonliving_derivative_definition_met": None,
+    }
+
+    raw_categories = request.get("material_categories", [])
+    categories = raw_categories if isinstance(raw_categories, list) else []
+    requested_sections = {
+        CATEGORY_TO_SECTION[category]
+        for category in categories
+        if category in CATEGORY_TO_SECTION
+    }
+    applicable_sections = ("A",) + tuple(
+        section for section in ("B", "C", "D", "E") if section in requested_sections
+    )
+    applicable_criteria = tuple(
+        criterion
+        for section in applicable_sections
+        for criterion in SECTION_CRITERIA[section]
+    )
+    related_details = intake.get("related_details")
+    has_narrative_details = (
+        isinstance(related_details, str) and bool(related_details.strip())
+    )
+    semantic_criteria = tuple(
+        criterion
+        if structured_facts[criterion.field_id] is None
+        or criterion.validate_semantics
+        else replace(
+            criterion,
+            semantic_sources=("related_details",),
+            semantic_labels=None,
+        )
+        for criterion in applicable_criteria
+        if structured_facts[criterion.field_id] is None
+        or criterion.validate_semantics
+        or (
+            has_narrative_details
+            and "related_details" in criterion.semantic_sources
+        )
+    )
+
+    raw_agreement = request.get("agreement_information", {})
+    agreement = raw_agreement if isinstance(raw_agreement, Mapping) else {}
+    semantic = analyze_open_text(
+        {
+            **{
+                field_id: intake.get(field_id, "")
+                for field_id in (
+                    "recipient_experimental_plan",
+                    "related_details",
+                    "human_derived_description",
+                    "human_data_classification",
+                    "protocol_consent_transfer_sections",
+                    "project_title",
+                    "recipient_entity",
+                )
+            },
+            "material_description": agreement.get("material_description", ""),
+        },
+        semantic_criteria,
+    )
+    semantic_facts = semantic["facts"]
+    facts = {
+        criterion.field_id: _merge_fact(
+            structured_facts[criterion.field_id],
+            semantic_facts.get(criterion.field_id),
+        )
+        for criterion in all_criteria()
     }
     trusted = verified_facts if isinstance(verified_facts, Mapping) else {}
     for field_id, value in facts.items():
@@ -400,6 +286,12 @@ def evaluate_eligibility(
     if not categories:
         missing_information.append(
             _scope_issue("At least one material category is required")
+        )
+    elif len(categories) > 1:
+        missing_information.append(
+            _scope_issue(
+                "Multiple material categories require manual special-case review"
+            )
         )
     elif unsupported:
         missing_information.append(

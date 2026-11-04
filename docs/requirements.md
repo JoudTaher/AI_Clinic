@@ -12,7 +12,7 @@ Required fields are marked in the interface. Missing or malformed questionnaire 
 
 ## Automatic approval
 
-The checklist is never displayed as requester input. The backend derives each checklist fact from the structured questionnaire answers and, where the source form provides only narrative data, conservative deterministic phrase rules. A trusted backend verification can supplement facts that institutional systems prove independently.
+The checklist is never displayed as requester input. The backend derives each checklist fact from deterministic structured questionnaire answers and, only where the source form provides narrative evidence, local Hugging Face semantic classification. A trusted backend verification can supplement facts that institutional systems prove independently.
 
 Every request evaluates checklist Section A. Chemical, biological, device, and animal-material requests also evaluate Sections B, C, D, and E respectively.
 
@@ -22,7 +22,7 @@ Every request evaluates checklist Section A. Chemical, biological, device, and a
 
 The checklist refers to Sections B through F, but the supplied checklist contains no Section F.
 
-The text analyzer uses the free, MIT-licensed spaCy library for local English sentence segmentation, then applies auditable checklist-specific phrase and negation rules. Explicit disqualifying language fails a rule; explicit qualifying language may pass it; ambiguous language remains unresolved and requires manual special-case review in eRPM. Every text decision records the matched phrase and source field in the screening report. It does not use a generative model, send text to a network service, or infer unstated facts.
+The text analyzer uses the free `facebook/bart-large-mnli` model through Hugging Face Transformers. It performs direct natural-language inference and, where contextual inference is required, zero-shot semantic-category classification. It contains no regex pass/fail phrase dictionary. Only relevant form fields defined by the checklist catalog are evaluated. Low-confidence or neutral results remain unresolved and require manual special-case review. Every semantic decision records its source field, model scores, and decision method in the screening report. The model is downloaded once and then runs locally; form content is not sent to a hosted inference service.
 
 Structured proxies are limited to the checklist comparison documented by the supplied sources: recipient organization type plus domestic-transfer answer, third-party-material answer, invention/licensing answer, funding answer, human-material/data answers, export-control answer, return answer, and category-specific safety answers. A negative or unresolved signal is never converted to a pass by text.
 
@@ -32,9 +32,9 @@ The general checklist rules use the submitted questionnaire as follows:
 - “No” to materials made using another party's or commercially purchased materials satisfies the ownership/no-third-party-restrictions rule. “Yes” requires review unless other evidence explicitly resolves the restriction.
 - “No” to purchasing a product/service, a qualifying non-profit recipient, and a completed recipient experimental plan satisfy the internal non-commercial-research rule. Explicit commercial or product-development language overrides that result and fails the rule.
 - “No” to the prior U-M invention-report/licensing question satisfies the invention-report/patent/encumbrance rule. “Yes” fails it.
-- The remaining general and material-specific rules use their corresponding funding, human-material/data, export-control, return, material-type, safety, and narrative-use answers. Explicit conflicting narrative language always overrides a structured pass.
+- The remaining general and material-specific rules use their corresponding funding, human-material/data, export-control, return, material-type, safety, and narrative-use answers. Deterministic structured answers are authoritative. An explicit contradiction in Other Relevant Details can override a structured pass; unrelated descriptive fields cannot.
 
-Material description is not an eligibility rule. It is required only after eligibility and template selection so the selected legal agreement can be populated accurately.
+Material description is required for agreement population and can provide semantic evidence for an otherwise unresolved material-category criterion. It is not treated as a standalone checklist rule and cannot override a directly answered structured export-control or safety question.
 
 ## Agreement mapping
 
@@ -67,4 +67,4 @@ The local signing manifest contains the populated document path and hash, intern
 
 ## Current boundary
 
-The app does not connect to eRPM or SignNow and makes no network requests. Authentication, persistent production storage, live e-signature submission, and eRPM integration remain outside this proof of concept.
+The app does not connect to eRPM. SignNow Development Mode can be enabled explicitly for API integration testing; local package mode remains the default. Authentication, persistent production storage, production SignNow activation, webhook status tracking, and eRPM integration remain outside this proof of concept.
