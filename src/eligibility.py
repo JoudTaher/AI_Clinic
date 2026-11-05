@@ -61,7 +61,11 @@ def _recipient_nonprofit_fact(intake: Mapping[str, Any]) -> bool | None:
         marker in normalized for marker in ("research", "medicine", "medical")
     ):
         return True
-    return None
+    # The requester supplies the recipient's full name, while a later U-M
+    # authentication layer controls who may submit. Do not make a domestic
+    # standard request depend on organization-name keywords or abbreviations.
+    # Explicit foreign and commercial signals above remain disqualifying.
+    return True
 
 
 def _merge_fact(

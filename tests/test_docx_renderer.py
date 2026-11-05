@@ -132,6 +132,28 @@ def test_autm_renderer_populates_and_activates_transmittal_fee_term(
     )
 
 
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "autm_chemical"),
+        ("animal_derived", "autm_biological"),
+    ],
+)
+def test_autm_renderer_populates_authorized_signatory_names_and_titles(
+    tmp_path: Path, category: str, template_id: str
+):
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "REQ-AUTM-SIGNERS", template(template_id), request_for(category)
+    )
+
+    signing_table = Document(artifact.path).tables[3]
+
+    assert "Dr. Provider" in signing_table.cell(2, 0).text
+    assert "Professor" in signing_table.cell(3, 0).text
+    assert "Alex Official" in signing_table.cell(2, 1).text
+    assert "Director of Research Agreements" in signing_table.cell(3, 1).text
+
+
 def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Path):
     renderer = DocxAgreementRenderer(tmp_path)
 

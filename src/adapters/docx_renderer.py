@@ -333,6 +333,28 @@ class DocxAgreementRenderer:
                 _set_legacy_checkbox(exhibit_notice, True)
                 _set_legacy_checkbox(fee_term, True)
                 _set_legacy_text_field(fee_term, data.transmittal_fee)
+            signer_values = (
+                (2, 0, data.provider_scientist_name),
+                (3, 0, data.provider_scientist_title),
+                (2, 1, data.recipient_authorized_official_name),
+                (3, 1, data.recipient_authorized_official_title),
+            )
+            for row, column, value in signer_values:
+                signer_cell = cls._cell(tables, 3, row, column)
+                signer_field = next(
+                    iter(
+                        signer_cell.xpath(
+                            "./w:p[.//w:instrText[contains(., 'FORMTEXT')]]",
+                            namespaces=NS,
+                        )
+                    ),
+                    None,
+                )
+                if signer_field is None:
+                    raise UnsupportedTemplateError(
+                        "Expected AUTM signer name or title field is missing"
+                    )
+                _set_legacy_text_field(signer_field, value)
             _preserve_signing_fields_only(tables[3])
         except IndexError as error:
             raise UnsupportedTemplateError(

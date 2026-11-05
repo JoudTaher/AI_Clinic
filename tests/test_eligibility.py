@@ -294,11 +294,45 @@ def test_domestic_noncommercial_nih_chemical_request_passes_eligibility():
     assert result["missing_information"] == []
 
 
+def test_domestic_named_recipient_does_not_require_organization_keywords():
+    request = plasmid_request()
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "GLBC",
+            "leaving_country": False,
+            "paying_for_material_as_product_or_service": False,
+            "recipient_experimental_plan": "Internal laboratory research.",
+            "related_details": "",
+        }
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "eligible"
+    assert "recipient_is_us_nonprofit" in ids(result["passed_checks"])
+
+
+def test_explicit_commercial_recipient_still_fails_recipient_rule():
+    request = plasmid_request()
+    request["erpm_intake"].update(
+        {
+            "recipient_entity": "Example Therapeutics LLC",
+            "leaving_country": False,
+            "related_details": "",
+        }
+    )
+
+    result = evaluate_eligibility(request)
+
+    assert result["status"] == "ineligible"
+    assert "recipient_is_us_nonprofit" in ids(result["failed_checks"])
+
+
 def test_email_domain_alone_does_not_establish_nonprofit_status():
     request = plasmid_request()
     request["erpm_intake"].update(
         {
-            "recipient_entity": "Unspecified recipient",
+            "recipient_entity": "",
             "recipient_scientist_email": "scientist@nih.gov",
             "recipient_administrative_contact_email": "admin@nih.gov",
             "leaving_country": False,
