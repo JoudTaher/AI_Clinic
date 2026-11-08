@@ -37,6 +37,9 @@ def build_screening_report(
     agreement_information = (
         dict(raw_agreement) if isinstance(raw_agreement, Mapping) else {}
     )
+    template_selection = select_template(request, eligibility)
+    selected_template = template_selection.get("selected_template")
+    template_id = selected_template if isinstance(selected_template, str) else None
     return {
         "proof_of_concept": True,
         "disclaimer": DISCLAIMER,
@@ -45,9 +48,11 @@ def build_screening_report(
         "agreement_information": agreement_information,
         "intake_readiness": evaluate_intake_readiness(request),
         "eligibility": eligibility,
-        "agreement_readiness": evaluate_agreement_readiness(request),
+        "agreement_readiness": evaluate_agreement_readiness(
+            request, template_id=template_id
+        ),
         "input_usage": build_input_usage(request),
-        "template_selection": select_template(request, eligibility),
+        "template_selection": template_selection,
     }
 
 

@@ -5,11 +5,10 @@ from pathlib import Path
 
 EXPECTED_FILES = {
     "Outgoing MTA Eligibility Checklist for UMSI.docx",
-    "Template_AUTM_MTA_for_Biological_Materials.doc",
-    "Template_AUTM_MTA_for_Biological_Materials.docx",
-    "Template_AUTM_MTA_for_Chemical_Materials.docx",
-    "Template_Simple Letter Agreement.docx",
-    "Template_UBMTA.docx",
+    "Template_AUTM_Animal.docx",
+    "Template_Chemical_Materials.docx",
+    "Template_Simple Letter_Device.docx",
+    "Template_UBMTA_Biological.docx",
 }
 
 

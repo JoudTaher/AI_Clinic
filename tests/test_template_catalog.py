@@ -10,20 +10,20 @@ def test_default_catalog_contains_every_supplied_agreement():
     catalog = load_template_catalog()
 
     assert [template.template_id for template in catalog] == [
-        "autm_chemical",
-        "autm_biological",
-        "simple_letter_agreement",
-        "ubmta_implementing_letter",
+        "chemical_material_agreement",
+        "animal_material_agreement",
+        "device_material_agreement",
+        "biological_material_agreement",
     ]
     assert all(template.source_path.is_file() for template in catalog)
     automated = {
         template.template_id: template.automation_enabled for template in catalog
     }
     assert automated == {
-        "autm_chemical": True,
-        "autm_biological": True,
-        "simple_letter_agreement": True,
-        "ubmta_implementing_letter": True,
+        "chemical_material_agreement": True,
+        "animal_material_agreement": True,
+        "device_material_agreement": True,
+        "biological_material_agreement": True,
     }
 
 

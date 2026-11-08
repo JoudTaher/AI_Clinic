@@ -39,24 +39,24 @@ def signature_field_codes(path: Path) -> list[str]:
     ]
 
 
-def paragraph_with_prefix(root: etree._Element, prefix: str) -> etree._Element:
+def paragraph_containing(root: etree._Element, marker: str) -> etree._Element:
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
     return next(
         paragraph
         for paragraph in root.xpath(".//w:body/w:p", namespaces=namespace)
-        if "".join(paragraph.xpath(".//w:t/text()", namespaces=namespace))
-        .strip()
-        .startswith(prefix)
+        if marker in "".join(
+            paragraph.xpath(".//w:t/text()", namespaces=namespace)
+        )
     )
 
 
 @pytest.mark.parametrize(
     ("category", "template_id", "expected_material"),
     [
-        ("chemical", "autm_chemical", "Synthetic research compound C-101"),
+        ("chemical", "chemical_material_agreement", "Synthetic research compound C-101"),
         (
             "animal_derived",
-            "autm_biological",
+            "animal_material_agreement",
             "Fixed, non-living mouse tissue samples",
         ),
     ],
@@ -82,13 +82,8 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
     ):
         assert expected in text
     assert "Expression is faulty" not in text
-    source_signing_fields = [
-        code
-        for code in signature_field_codes(template(template_id).source_path)
-        if code == "FORMTEXT"
-    ]
-    assert signature_field_codes(artifact.path) == source_signing_fields
-    assert source_signing_fields == ["FORMTEXT"] * 6
+    assert signature_field_codes(template(template_id).source_path) == []
+    assert signature_field_codes(artifact.path) == []
     with ZipFile(artifact.path) as package:
         root = etree.fromstring(package.read("word/document.xml"))
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
@@ -104,8 +99,8 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
 @pytest.mark.parametrize(
     ("category", "template_id"),
     [
-        ("chemical", "autm_chemical"),
-        ("animal_derived", "autm_biological"),
+        ("chemical", "chemical_material_agreement"),
+        ("animal_derived", "animal_material_agreement"),
     ],
 )
 def test_autm_renderer_populates_and_activates_transmittal_fee_term(
@@ -118,25 +113,23 @@ def test_autm_renderer_populates_and_activates_transmittal_fee_term(
     with ZipFile(artifact.path) as package:
         root = etree.fromstring(package.read("word/document.xml"))
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    exhibit_notice = paragraph_with_prefix(root, "If checked, this Agreement")
-    fee_term = paragraph_with_prefix(root, "A transmittal fee of")
+    exhibit_notice = paragraph_containing(root, "If checked, this Agreement")
+    fee_term = paragraph_containing(root, "A transmittal fee of")
 
-    assert "$125.00" in "".join(
-        fee_term.xpath(".//w:t/text()", namespaces=namespace)
+    exhibit_text = "".join(
+        exhibit_notice.xpath(".//w:t/text()", namespaces=namespace)
     )
-    assert exhibit_notice.xpath(
-        ".//w:checkBox/w:checked[@w:val='1']", namespaces=namespace
-    )
-    assert fee_term.xpath(
-        ".//w:checkBox/w:checked[@w:val='1']", namespaces=namespace
-    )
+    fee_text = "".join(fee_term.xpath(".//w:t/text()", namespaces=namespace))
+    assert exhibit_text.strip().startswith("☒")
+    assert fee_text.strip().startswith("☒")
+    assert "$125.00" in fee_text
 
 
 @pytest.mark.parametrize(
     ("category", "template_id"),
     [
-        ("chemical", "autm_chemical"),
-        ("animal_derived", "autm_biological"),
+        ("chemical", "chemical_material_agreement"),
+        ("animal_derived", "animal_material_agreement"),
     ],
 )
 def test_autm_renderer_populates_authorized_signatory_names_and_titles(
@@ -158,7 +151,7 @@ def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Pat
     renderer = DocxAgreementRenderer(tmp_path)
 
     artifact = renderer.render(
-        "REQ-101", template("ubmta_implementing_letter"), request_for("biological")
+        "REQ-101", template("biological_material_agreement"), request_for("biological")
     )
 
     text = document_text(artifact.path)
@@ -190,7 +183,7 @@ def test_ubmta_uses_recipient_scientist_as_certifier_when_authorized(tmp_path: P
     information["recipient_authorized_official_email"] = ""
 
     artifact = DocxAgreementRenderer(tmp_path).render(
-        "REQ-101-CERTIFIER", template("ubmta_implementing_letter"), request
+        "REQ-101-CERTIFIER", template("biological_material_agreement"), request
     )
 
     text = document_text(artifact.path)
@@ -204,7 +197,7 @@ def test_renderer_allows_blank_optional_scientist_titles(tmp_path: Path):
     request["agreement_information"]["provider_scientist_title"] = ""
     renderer = DocxAgreementRenderer(tmp_path)
 
-    artifact = renderer.render("REQ-102", template("autm_chemical"), request)
+    artifact = renderer.render("REQ-102", template("chemical_material_agreement"), request)
 
     assert artifact.path.is_file()
 
@@ -219,7 +212,7 @@ def test_renderer_rejects_missing_template_specific_authorized_official(
         AgreementDataError, match="recipient_authorized_official_name"
     ):
         DocxAgreementRenderer(tmp_path).render(
-            "REQ-102-OFFICIAL", template("simple_letter_agreement"), request
+            "REQ-102-OFFICIAL", template("device_material_agreement"), request
         )
 
     assert list(tmp_path.iterdir()) == []
@@ -229,7 +222,7 @@ def test_simple_letter_renderer_populates_material_parties_and_fee(tmp_path: Pat
     renderer = DocxAgreementRenderer(tmp_path)
 
     artifact = renderer.render(
-        "REQ-103", template("simple_letter_agreement"), request_for("device")
+        "REQ-103", template("device_material_agreement"), request_for("device")
     )
 
     text = document_text(artifact.path)

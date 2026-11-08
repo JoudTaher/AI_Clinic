@@ -52,6 +52,16 @@ def test_autm_request_requires_recipient_authorized_official():
     assert "recipient_authorized_official_email" in result["missing_fields"]
 
 
+def test_template_specific_readiness_does_not_treat_non_signer_email_as_agreement_data():
+    request = request_for("chemical")
+    request["erpm_intake"]["recipient_scientist_email"] = ""
+
+    result = evaluate_agreement_readiness(request, template_id="chemical_material_agreement")
+
+    assert result["status"] == "ready"
+    assert "recipient_scientist_email" not in result["missing_fields"]
+
+
 def test_simple_letter_requires_recipient_authorized_official():
     request = request_for("device")
     request["agreement_information"]["recipient_authorized_official_name"] = ""

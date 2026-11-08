@@ -1,5 +1,10 @@
 # Reference Files
 
-The checklist and four original agreement templates are byte-for-byte working copies of the files supplied for the proof of concept. The SHA-256 hashes in `manifest.json` verify the originals and the automation-compatible biological DOCX source used by the renderer.
+This directory contains the approved eligibility checklist and the four clean DOCX agreement templates used by the proof of concept:
 
-The AUTM biological source is a legacy `.doc`. Its `.docx` conversion preserves the contract text and is used only as the automation-compatible population source. The renderer clears the conversion's legacy form-field artifacts before producing an agreement.
+- `Template_AUTM_Animal.docx`
+- `Template_Chemical_Materials.docx`
+- `Template_Simple Letter_Device.docx`
+- `Template_UBMTA_Biological.docx`
+
+The SHA-256 hashes in `manifest.json` identify the exact files expected by the application and tests. The renderer populates the templates' labeled paragraphs and table cells, while their signature and date lines remain available for SignNow tagging.

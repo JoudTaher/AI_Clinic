@@ -165,6 +165,9 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
         item for item in app.text_input if item.label == "Recipient Scientist Name *"
     ).set_value("Dr. Recipient")
     next(
+        item for item in app.text_input if item.label == "Recipient Scientist Email *"
+    ).set_value("recipient@example.org")
+    next(
         item for item in app.multiselect if item.label == "Material Type *"
     ).select("Plasmid/Vector (rDNA or SNA)")
     app.run(timeout=10)
@@ -175,8 +178,56 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
     assert "Provider Scientist title" not in labels
     assert "Recipient Scientist title" not in labels
     captions = [item.value for item in app.caption]
-    assert "Provider Scientist full name: Dr. Provider" in captions
-    assert "Recipient Scientist full name: Dr. Recipient" in captions
+    assert "Provider Scientist full name: Dr. Provider (from Contact PI)" in captions
+    assert (
+        "Recipient Scientist: Dr. Recipient · recipient@example.org "
+        "(reused from Outgoing Material Details)"
+        in captions
+    )
+
+
+def test_ubmta_shows_exact_signnow_invitation_sources():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    next(item for item in app.text_input if item.label == "Contact PI *").set_value(
+        "Dr. Provider"
+    )
+    next(
+        item for item in app.text_input if item.label == "Recipient Scientist Name *"
+    ).set_value("Dr. Recipient")
+    next(
+        item for item in app.text_input if item.label == "Recipient Scientist Email *"
+    ).set_value("recipient@example.org")
+    next(
+        item for item in app.multiselect if item.label == "Material Type *"
+    ).select("Plasmid/Vector (rDNA or SNA)")
+    app.run(timeout=10)
+
+    next(
+        item
+        for item in app.text_input
+        if item.label == "Provider Scientist signing email *"
+    ).set_value("provider@umich.edu")
+    next(
+        item
+        for item in app.selectbox
+        if item.label
+        == "Recipient Scientist authorized to certify for Recipient Organization? *"
+    ).select("Yes")
+    app.run(timeout=10)
+
+    captions = [item.value for item in app.caption]
+    assert (
+        "Signing order 1 — Recipient Scientist: Dr. Recipient "
+        "<recipient@example.org> (from Outgoing Material Details)."
+        in captions
+    )
+    assert (
+        "Signing order 2 — Provider Scientist: Dr. Provider "
+        "<provider@umich.edu> (name from Contact PI; signing email from "
+        "Agreement and Signing Information)."
+        in captions
+    )
 
 
 def test_autm_shows_autm_shipping_and_signatory_entries():

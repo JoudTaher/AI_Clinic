@@ -62,105 +62,6 @@ def _replace_paragraph_text(paragraph: etree._Element, value: str) -> None:
         _set_text_node(node, "")
 
 
-def _set_legacy_checkbox(paragraph: etree._Element, checked: bool) -> None:
-    checkbox = next(iter(paragraph.xpath(".//w:checkBox", namespaces=NS)), None)
-    if checkbox is None:
-        raise UnsupportedTemplateError("Expected legacy checkbox is missing")
-    for tag in ("default", "checked"):
-        state = checkbox.find(_word(tag))
-        if state is None:
-            state = etree.SubElement(checkbox, _word(tag))
-        state.set(_word("val"), "1" if checked else "0")
-
-
-def _set_legacy_text_field(paragraph: etree._Element, value: str) -> None:
-    begin = next(
-        iter(
-            paragraph.xpath(
-                "./w:r/w:fldChar[@w:fldCharType='begin'][w:ffData/w:textInput]",
-                namespaces=NS,
-            )
-        ),
-        None,
-    )
-    if begin is None:
-        raise UnsupportedTemplateError("Expected legacy text field is missing")
-
-    begin_run = begin.getparent()
-    children = list(paragraph)
-    begin_index = children.index(begin_run)
-    depth = 0
-    separate_index: int | None = None
-    end_index: int | None = None
-    for index in range(begin_index, len(children)):
-        for field_character in children[index].xpath("./w:fldChar", namespaces=NS):
-            character_type = field_character.get(_word("fldCharType"))
-            if character_type == "begin":
-                depth += 1
-            elif character_type == "separate" and depth == 1:
-                separate_index = index
-            elif character_type == "end":
-                depth -= 1
-                if depth == 0:
-                    end_index = index
-                    break
-        if end_index is not None:
-            break
-
-    if separate_index is None or end_index is None:
-        raise UnsupportedTemplateError("Legacy text field boundaries are incomplete")
-
-    result_run = etree.Element(_word("r"))
-    begin_properties = begin_run.find(_word("rPr"))
-    if begin_properties is not None:
-        result_run.append(deepcopy(begin_properties))
-    text_node = etree.SubElement(result_run, _word("t"))
-    _set_text_node(text_node, value)
-    for child in children[separate_index + 1 : end_index]:
-        paragraph.remove(child)
-    paragraph.insert(separate_index + 1, result_run)
-
-
-def _preserve_signing_fields_only(container: etree._Element) -> None:
-    """Remove malformed legacy fields while preserving intended signer inputs."""
-    for paragraph in container.xpath(".//w:p[.//w:instrText]", namespaces=NS):
-        children = list(paragraph)
-        field_stack: list[int] = []
-        top_level_start: int | None = None
-        field_ranges: list[tuple[list[etree._Element], list[str]]] = []
-
-        for index, child in enumerate(children):
-            for field_character in child.xpath("./w:fldChar", namespaces=NS):
-                character_type = field_character.get(_word("fldCharType"))
-                if character_type == "begin":
-                    if not field_stack:
-                        top_level_start = index
-                    field_stack.append(index)
-                elif character_type == "end" and field_stack:
-                    field_stack.pop()
-                    if not field_stack and top_level_start is not None:
-                        elements = children[top_level_start : index + 1]
-                        codes = [
-                            (node.text or "").strip()
-                            for element in elements
-                            for node in element.xpath(".//w:instrText", namespaces=NS)
-                        ]
-                        field_ranges.append((elements, codes))
-                        top_level_start = None
-
-        if field_stack:
-            raise UnsupportedTemplateError(
-                "A legacy field in the AUTM signing table is incomplete"
-            )
-
-        for elements, codes in reversed(field_ranges):
-            if "FORMTEXT" in codes:
-                continue
-            for element in elements:
-                if element.getparent() is paragraph:
-                    paragraph.remove(element)
-
-
 def _set_cell_text(
     cell: etree._Element,
     value: str,
@@ -191,6 +92,14 @@ def _set_cell_text(
 
     paragraph = etree.SubElement(cell, _word("p"))
     if paragraph_properties is not None:
+        if font_size_half_points is not None:
+            paragraph_run_properties = paragraph_properties.find(_word("rPr"))
+            if paragraph_run_properties is not None:
+                for tag in (_word("sz"), _word("szCs")):
+                    for existing_size in paragraph_run_properties.findall(tag):
+                        paragraph_run_properties.remove(existing_size)
+                    size = etree.SubElement(paragraph_run_properties, tag)
+                    size.set(_word("val"), str(font_size_half_points))
         paragraph.append(paragraph_properties)
     run = etree.SubElement(paragraph, _word("r"))
     if run_properties is not None:
@@ -220,7 +129,10 @@ def _set_cell_text(
 
 
 class DocxAgreementRenderer:
-    _AUTM_IDS = {"autm_chemical", "autm_biological"}
+    _AUTM_TEMPLATE_IDS = {
+        "chemical_material_agreement",
+        "animal_material_agreement",
+    }
 
     def __init__(self, output_dir: Path) -> None:
         self.output_dir = output_dir
@@ -231,9 +143,9 @@ class DocxAgreementRenderer:
         template: TemplateDefinition,
         request: Mapping[str, Any],
     ) -> RenderedAgreement:
-        supported = self._AUTM_IDS | {
-            "ubmta_implementing_letter",
-            "simple_letter_agreement",
+        supported = self._AUTM_TEMPLATE_IDS | {
+            "biological_material_agreement",
+            "device_material_agreement",
         }
         if not template.automation_enabled or template.template_id not in supported:
             raise UnsupportedTemplateError(
@@ -248,9 +160,9 @@ class DocxAgreementRenderer:
         data = AgreementData.from_request(request, template.template_id)
         with ZipFile(template.source_path) as source:
             root = etree.fromstring(source.read("word/document.xml"))
-            if template.template_id in self._AUTM_IDS:
+            if template.template_id in self._AUTM_TEMPLATE_IDS:
                 self._populate_autm(root, data)
-            elif template.template_id == "ubmta_implementing_letter":
+            elif template.template_id == "biological_material_agreement":
                 self._populate_ubmta(root, data)
             else:
                 self._populate_simple_letter(root, data)
@@ -326,36 +238,31 @@ class DocxAgreementRenderer:
                 "$0",
                 "$0.00",
             }:
-                exhibit_notice = cls._nth_starting(
-                    root, "If checked, this Agreement", 0
+                exhibit_notice = cls._paragraph_containing(
+                    root, "If checked, this Agreement"
                 )
-                fee_term = cls._nth_starting(root, "A transmittal fee of", 0)
-                _set_legacy_checkbox(exhibit_notice, True)
-                _set_legacy_checkbox(fee_term, True)
-                _set_legacy_text_field(fee_term, data.transmittal_fee)
+                fee_term = cls._paragraph_containing(root, "A transmittal fee of")
+                cls._set_plain_checkbox(exhibit_notice, checked=True)
+                cls._set_plain_checkbox(fee_term, checked=True)
+                cls._replace_between(
+                    fee_term,
+                    "A transmittal fee of ",
+                    " shall be paid",
+                    data.transmittal_fee,
+                )
             signer_values = (
-                (2, 0, data.provider_scientist_name),
-                (3, 0, data.provider_scientist_title),
-                (2, 1, data.recipient_authorized_official_name),
-                (3, 1, data.recipient_authorized_official_title),
+                (2, 0, data.provider_scientist_name, "Print Name"),
+                (3, 0, data.provider_scientist_title, "Title"),
+                (2, 1, data.recipient_authorized_official_name, "Print Name"),
+                (3, 1, data.recipient_authorized_official_title, "Title"),
             )
-            for row, column, value in signer_values:
+            for row, column, value, label in signer_values:
                 signer_cell = cls._cell(tables, 3, row, column)
-                signer_field = next(
-                    iter(
-                        signer_cell.xpath(
-                            "./w:p[.//w:instrText[contains(., 'FORMTEXT')]]",
-                            namespaces=NS,
-                        )
-                    ),
-                    None,
+                _set_cell_text(
+                    signer_cell,
+                    f"{value}\n{label}",
+                    font_size_half_points=18,
                 )
-                if signer_field is None:
-                    raise UnsupportedTemplateError(
-                        "Expected AUTM signer name or title field is missing"
-                    )
-                _set_legacy_text_field(signer_field, value)
-            _preserve_signing_fields_only(tables[3])
         except IndexError as error:
             raise UnsupportedTemplateError(
                 "The AUTM template structure does not match the approved slot map"
@@ -383,6 +290,74 @@ class DocxAgreementRenderer:
             raise UnsupportedTemplateError(
                 f"Expected template line is missing: {prefix} occurrence {occurrence + 1}"
             ) from error
+
+    @classmethod
+    def _paragraph_containing(
+        cls, root: etree._Element, marker: str
+    ) -> etree._Element:
+        matches = [
+            paragraph
+            for paragraph in cls._paragraphs(root)
+            if marker in _text(paragraph)
+        ]
+        if len(matches) != 1:
+            raise UnsupportedTemplateError(
+                f"Expected exactly one template line containing: {marker}"
+            )
+        return matches[0]
+
+    @classmethod
+    def _paragraph_after_heading_prefix(
+        cls, root: etree._Element, heading_prefix: str
+    ) -> etree._Element:
+        paragraphs = cls._paragraphs(root)
+        heading_index = next(
+            (
+                index
+                for index, paragraph in enumerate(paragraphs)
+                if _text(paragraph).strip().startswith(heading_prefix)
+            ),
+            None,
+        )
+        if heading_index is None or heading_index + 1 >= len(paragraphs):
+            raise UnsupportedTemplateError(
+                f"Expected template heading is missing: {heading_prefix}"
+            )
+        return paragraphs[heading_index + 1]
+
+    @staticmethod
+    def _set_plain_checkbox(paragraph: etree._Element, *, checked: bool) -> None:
+        value = _text(paragraph)
+        stripped = value.lstrip()
+        if not stripped.startswith(("☐", "☒")):
+            raise UnsupportedTemplateError("Expected plain checkbox is missing")
+        indentation = value[: len(value) - len(stripped)]
+        symbol = "☒" if checked else "☐"
+        _replace_paragraph_text(paragraph, indentation + symbol + stripped[1:])
+
+    @staticmethod
+    def _replace_between(
+        paragraph: etree._Element,
+        start_marker: str,
+        end_marker: str,
+        value: str,
+    ) -> None:
+        current = _text(paragraph)
+        start = current.find(start_marker)
+        if start < 0:
+            raise UnsupportedTemplateError(
+                f"Expected template marker is missing: {start_marker}"
+            )
+        value_start = start + len(start_marker)
+        end = current.find(end_marker, value_start)
+        if end < 0:
+            raise UnsupportedTemplateError(
+                f"Expected template marker is missing: {end_marker}"
+            )
+        _replace_paragraph_text(
+            paragraph,
+            current[:value_start] + value + current[end:],
+        )
 
     @classmethod
     def _line_after_heading(
@@ -440,16 +415,7 @@ class DocxAgreementRenderer:
             recipient_address, f"Address:\t\t{data.recipient_address}"
         )
 
-        material = next(
-            (
-                paragraph
-                for paragraph in cls._paragraphs(root)
-                if "MATERIAL (UM Technology Transfer File #XXXX)" in _text(paragraph)
-            ),
-            None,
-        )
-        if material is None:
-            raise UnsupportedTemplateError("Expected UBMTA material marker is missing")
+        material = cls._paragraph_after_heading_prefix(root, "3.ORIGINAL MATERIAL")
         _replace_paragraph_text(material, data.material_description)
 
         fee = next(
@@ -465,9 +431,13 @@ class DocxAgreementRenderer:
         _replace_marker(fee, "[enter amount]", data.transmittal_fee + " ")
 
         provider_name = cls._line_after_heading(root, "PROVIDER SCIENTIST", "Name:")
-        _replace_marker(provider_name, "FACULTY MEMBER", data.provider_scientist_name)
+        _replace_paragraph_text(
+            provider_name, f"Name:\t\t{data.provider_scientist_name}"
+        )
         provider_title = cls._line_after_heading(root, "PROVIDER SCIENTIST", "Title:")
-        _replace_marker(provider_title, "FACULTY TITLE", data.provider_scientist_title)
+        _replace_paragraph_text(
+            provider_title, f"Title:\t\t{data.provider_scientist_title}"
+        )
 
         recipient_name = cls._line_after_heading(root, "RECIPIENT SCIENTIST", "Name:")
         _replace_paragraph_text(
@@ -535,17 +505,13 @@ class DocxAgreementRenderer:
     def _populate_simple_letter(
         cls, root: etree._Element, data: AgreementData
     ) -> None:
-        paragraphs = cls._paragraphs(root)
-        material = next(
-            (paragraph for paragraph in paragraphs if "[insert description]" in _text(paragraph)),
-            None,
+        material = cls._paragraph_after_heading_prefix(
+            root,
+            "In response to the RECIPIENT's request for the MATERIAL:",
         )
-        if material is None:
-            raise UnsupportedTemplateError(
-                "Expected Simple Letter material marker is missing"
-            )
-        _replace_marker(material, "[insert description]", data.material_description)
+        _replace_paragraph_text(material, data.material_description)
 
+        paragraphs = cls._paragraphs(root)
         fee = next(
             (paragraph for paragraph in paragraphs if "[insert fee here]" in _text(paragraph)),
             None,

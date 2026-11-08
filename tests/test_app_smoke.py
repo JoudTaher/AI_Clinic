@@ -11,10 +11,10 @@ from tests.fixtures import request_for
 @pytest.mark.parametrize(
     ("category", "template_id"),
     [
-        ("chemical", "autm_chemical"),
-        ("biological", "ubmta_implementing_letter"),
-        ("animal_derived", "autm_biological"),
-        ("device", "simple_letter_agreement"),
+        ("chemical", "chemical_material_agreement"),
+        ("biological", "biological_material_agreement"),
+        ("animal_derived", "animal_material_agreement"),
+        ("device", "device_material_agreement"),
     ],
 )
 def test_real_standard_workflow_creates_agreement_and_signing_package(

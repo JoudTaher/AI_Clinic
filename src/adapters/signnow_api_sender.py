@@ -257,11 +257,11 @@ class TaggedAgreementBuilder:
         return definitions
 
     def _insert_tags(self, root: etree._Element, template_id: str) -> list[str]:
-        if template_id in {"autm_chemical", "autm_biological"}:
+        if template_id in {"chemical_material_agreement", "animal_material_agreement"}:
             return self._insert_autm(root)
-        if template_id == "ubmta_implementing_letter":
+        if template_id == "biological_material_agreement":
             return self._insert_ubmta(root)
-        if template_id == "simple_letter_agreement":
+        if template_id == "device_material_agreement":
             return self._insert_simple_letter(root)
         raise DeliveryError(f"Unsupported SignNow template: {template_id}")
 

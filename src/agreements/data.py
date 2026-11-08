@@ -64,10 +64,10 @@ class AgreementData:
         if not isinstance(can_certify, bool):
             can_certify = False
         requires_recipient_official = template_id in {
-            "autm_chemical",
-            "autm_biological",
-            "simple_letter_agreement",
-        } or (template_id == "ubmta_implementing_letter" and not can_certify)
+            "chemical_material_agreement",
+            "animal_material_agreement",
+            "device_material_agreement",
+        } or (template_id == "biological_material_agreement" and not can_certify)
 
         recipient_official_name = (
             required("recipient_authorized_official_name")
@@ -94,10 +94,10 @@ class AgreementData:
             recipient_scientist_can_certify_organization=can_certify,
             material_description=required("material_description"),
             shipping_recipient_name=required_for(
-                "shipping_recipient_name", {"autm_chemical", "autm_biological"}
+                "shipping_recipient_name", {"chemical_material_agreement", "animal_material_agreement"}
             ),
             shipping_address=required_for(
-                "shipping_address", {"autm_chemical", "autm_biological"}
+                "shipping_address", {"chemical_material_agreement", "animal_material_agreement"}
             ),
             transmittal_fee=fee.strip() or "N/A",
         )

@@ -15,12 +15,12 @@ def artifact(tmp_path: Path, template_id: str) -> RenderedAgreement:
     return RenderedAgreement(template_id=template_id, path=path)
 
 
-@pytest.mark.parametrize("template_id", ["autm_chemical", "autm_biological"])
+@pytest.mark.parametrize("template_id", ["chemical_material_agreement", "animal_material_agreement"])
 def test_autm_package_has_recipient_then_delegated_pi_signers(
     tmp_path: Path, template_id: str
 ):
     sender = SignNowPackageSender(tmp_path / "signing")
-    category = "chemical" if template_id == "autm_chemical" else "animal_derived"
+    category = "chemical" if template_id == "chemical_material_agreement" else "animal_derived"
 
     receipt = sender.send(
         "REQ/AUTM", request_for(category), artifact(tmp_path, template_id)
@@ -53,7 +53,7 @@ def test_ubmta_package_assigns_visible_signature_roles_and_order(tmp_path: Path)
     receipt = sender.send(
         "REQ-UBMTA",
         request_for("biological"),
-        artifact(tmp_path, "ubmta_implementing_letter"),
+        artifact(tmp_path, "biological_material_agreement"),
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
@@ -74,7 +74,7 @@ def test_signing_package_allows_optional_provider_and_recipient_titles(tmp_path:
     receipt = sender.send(
         "REQ-OPTIONAL-TITLES",
         request,
-        artifact(tmp_path, "ubmta_implementing_letter"),
+        artifact(tmp_path, "biological_material_agreement"),
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
@@ -92,7 +92,7 @@ def test_ubmta_combines_recipient_roles_when_scientist_can_certify(tmp_path: Pat
     receipt = sender.send(
         "REQ-UBMTA-ONE",
         request,
-        artifact(tmp_path, "ubmta_implementing_letter"),
+        artifact(tmp_path, "biological_material_agreement"),
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
@@ -111,9 +111,23 @@ def test_missing_recipient_signer_data_does_not_write_manifest(tmp_path: Path):
     sender = SignNowPackageSender(output_dir)
 
     with pytest.raises(DeliveryError, match="recipient_authorized_official_email"):
-        sender.send("REQ-NO-SIGNER", request, artifact(tmp_path, "autm_chemical"))
+        sender.send("REQ-NO-SIGNER", request, artifact(tmp_path, "chemical_material_agreement"))
 
     assert not output_dir.exists()
+
+
+def test_missing_signer_error_reports_every_missing_identity_field(tmp_path: Path):
+    request = request_for("chemical")
+    information = request["agreement_information"]
+    information["recipient_authorized_official_email"] = ""
+    request["erpm_intake"]["contact_pi_name"] = ""
+    sender = SignNowPackageSender(tmp_path / "signing")
+
+    with pytest.raises(DeliveryError) as caught:
+        sender.send("REQ-MISSING-SIGNERS", request, artifact(tmp_path, "chemical_material_agreement"))
+
+    assert "recipient_authorized_official_email" in str(caught.value)
+    assert "provider_scientist_name" in str(caught.value)
 
 
 def test_simple_letter_package_matches_visible_signature_roles(tmp_path: Path):
@@ -122,7 +136,7 @@ def test_simple_letter_package_matches_visible_signature_roles(tmp_path: Path):
     receipt = sender.send(
         "REQ-SIMPLE",
         request_for("device"),
-        artifact(tmp_path, "simple_letter_agreement"),
+        artifact(tmp_path, "device_material_agreement"),
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
@@ -142,7 +156,7 @@ def test_simple_letter_ignores_stale_recipient_scientist_title(tmp_path: Path):
     receipt = sender.send(
         "REQ-SIMPLE-STALE",
         request,
-        artifact(tmp_path, "simple_letter_agreement"),
+        artifact(tmp_path, "device_material_agreement"),
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))

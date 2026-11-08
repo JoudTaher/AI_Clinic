@@ -81,7 +81,7 @@ def test_standard_request_is_auto_approved_and_prepared():
     result = pipeline.run(request)
 
     assert result.status == "prepared_for_signature"
-    assert result.selected_template == "autm_chemical"
+    assert result.selected_template == "chemical_material_agreement"
     assert result.submission_id.startswith("mta-")
     assert "auto_approved:standard_rules" in result.audit_events
     assert renderer.calls == 1
@@ -96,7 +96,7 @@ def test_missing_agreement_information_stops_after_template_selection():
     result = pipeline.run(request)
 
     assert result.status == "agreement_incomplete"
-    assert result.selected_template == "autm_chemical"
+    assert result.selected_template == "chemical_material_agreement"
     assert "material_description" in result.reasons
     assert renderer.calls == 0
     assert sender.calls == 0
@@ -110,7 +110,7 @@ def test_special_case_agreement_terms_require_manual_review_before_rendering():
     result = pipeline.run(request)
 
     assert result.status == "manual_special_case_review"
-    assert result.selected_template == "autm_chemical"
+    assert result.selected_template == "chemical_material_agreement"
     assert "Provider material is not supplied at no cost." in result.reasons
     assert "agreement_terms_need_review" in result.audit_events
     assert renderer.calls == 0
@@ -222,7 +222,7 @@ def test_questionnaire_material_type_overrides_contradictory_derived_category():
     result = pipeline.run(request)
 
     assert result.status == "prepared_for_signature"
-    assert result.selected_template == "autm_chemical"
+    assert result.selected_template == "chemical_material_agreement"
 
 
 def test_mixed_questionnaire_cannot_be_disguised_as_one_category():

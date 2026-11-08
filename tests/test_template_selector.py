@@ -9,40 +9,40 @@ def test_ineligible_request_has_no_template_selection():
     assert result["candidate_templates"] == []
 
 
-def test_eligible_chemical_request_selects_autm_chemical():
+def test_eligible_chemical_request_selects_chemical_material_agreement():
     result = select_template(request_for("chemical"), {"status": "eligible"})
     assert result["status"] == "template_selected"
-    assert result["selected_template"] == "autm_chemical"
+    assert result["selected_template"] == "chemical_material_agreement"
     assert result["recommended_template"] is None
-    assert result["candidate_templates"] == ["autm_chemical"]
+    assert result["candidate_templates"] == ["chemical_material_agreement"]
     assert "source_path" not in result["candidate_details"][0]
     assert result["candidate_details"][0]["source_file"] == (
-        "Template_AUTM_MTA_for_Chemical_Materials.docx"
+        "Template_Chemical_Materials.docx"
     )
 
 
-def test_eligible_biological_request_selects_ubmta():
+def test_eligible_biological_request_selects_biological_material_agreement():
     result = select_template(request_for("biological"), {"status": "eligible"})
     assert result["status"] == "template_selected"
-    assert result["selected_template"] == "ubmta_implementing_letter"
-    assert result["candidate_templates"] == ["ubmta_implementing_letter"]
+    assert result["selected_template"] == "biological_material_agreement"
+    assert result["candidate_templates"] == ["biological_material_agreement"]
 
 
-def test_eligible_animal_request_selects_autm_biological():
+def test_eligible_animal_request_selects_animal_material_agreement():
     result = select_template(
         request_for("animal_derived"), {"status": "eligible"}
     )
 
     assert result["status"] == "template_selected"
-    assert result["selected_template"] == "autm_biological"
-    assert result["candidate_templates"] == ["autm_biological"]
+    assert result["selected_template"] == "animal_material_agreement"
+    assert result["candidate_templates"] == ["animal_material_agreement"]
 
 
-def test_eligible_device_request_selects_simple_letter():
+def test_eligible_device_request_selects_device_material_agreement():
     result = select_template(request_for("device"), {"status": "eligible"})
     assert result["status"] == "template_selected"
-    assert result["selected_template"] == "simple_letter_agreement"
-    assert result["candidate_templates"] == ["simple_letter_agreement"]
+    assert result["selected_template"] == "device_material_agreement"
+    assert result["candidate_templates"] == ["device_material_agreement"]
     assert result["recommended_template"] is None
 
 
@@ -52,7 +52,10 @@ def test_mixed_request_never_selects_candidate():
     )
     assert result["status"] == "manual_special_case_review"
     assert result["selected_template"] is None
-    assert result["candidate_templates"] == ["autm_chemical", "ubmta_implementing_letter"]
+    assert result["candidate_templates"] == [
+        "chemical_material_agreement",
+        "biological_material_agreement",
+    ]
 
 
 def test_malformed_material_categories_fail_closed_instead_of_crashing():

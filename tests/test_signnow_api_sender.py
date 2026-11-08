@@ -73,9 +73,9 @@ class RecordingTransport:
 def rendered_agreement(tmp_path: Path, category: str):
     request = request_for(category)
     template_by_category = {
-        "chemical": "autm_chemical",
-        "biological": "ubmta_implementing_letter",
-        "device": "simple_letter_agreement",
+        "chemical": "chemical_material_agreement",
+        "biological": "biological_material_agreement",
+        "device": "device_material_agreement",
     }
     template_id = template_by_category[category]
     template = next(

@@ -49,7 +49,7 @@ def test_report_uses_the_same_trusted_backend_facts_as_the_pipeline():
 
     assert report["eligibility"]["status"] == "eligible"
     assert report["template_selection"]["selected_template"] == (
-        "ubmta_implementing_letter"
+        "biological_material_agreement"
     )
 
 

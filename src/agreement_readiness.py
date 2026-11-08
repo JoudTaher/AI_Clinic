@@ -5,14 +5,14 @@ from typing import Any
 
 from src.field_validation import email_errors
 from src.request_normalization import normalize_request
+from src.signing.plan import build_signer_plan
+from src.templates.catalog import load_template_catalog
 
 COMMON_REQUIRED_TEXT_FIELDS = (
     "recipient_institution_name",
     "recipient_institution_address",
     "recipient_scientist_name",
-    "recipient_scientist_email",
     "provider_scientist_name",
-    "provider_scientist_email",
     "material_description",
     "recipient_research_purpose",
     "requested_duration",
@@ -23,13 +23,6 @@ AUTM_REQUIRED_TEXT_FIELDS = (
     "shipping_address",
 )
 
-RECIPIENT_OFFICIAL_FIELDS = (
-    "recipient_authorized_official_name",
-    "recipient_authorized_official_title",
-    "recipient_authorized_official_email",
-)
-
-
 def _missing_text(information: Mapping[str, Any], fields: tuple[str, ...]) -> list[str]:
     return [
         field_id
@@ -39,7 +32,9 @@ def _missing_text(information: Mapping[str, Any], fields: tuple[str, ...]) -> li
     ]
 
 
-def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
+def evaluate_agreement_readiness(
+    request: Mapping[str, Any], template_id: str | None = None
+) -> dict[str, Any]:
     """Check data needed to prepare and sign the selected agreement.
 
     Requester-questionnaire completeness and Standard MTA eligibility are evaluated
@@ -57,7 +52,16 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
         else None
     )
 
-    if category not in {"chemical", "animal_derived", "biological", "device"}:
+    if template_id is None and isinstance(category, str):
+        candidates = [
+            definition.template_id
+            for definition in load_template_catalog()
+            if definition.automation_enabled
+            and category in definition.material_categories
+        ]
+        template_id = candidates[0] if len(candidates) == 1 else None
+
+    if template_id is None:
         return {
             "status": "not_applicable",
             "missing_fields": [],
@@ -68,24 +72,11 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
         }
 
     missing_fields = _missing_text(information, COMMON_REQUIRED_TEXT_FIELDS)
-
-    requires_recipient_official = category in {
-        "chemical",
-        "animal_derived",
-        "device",
-    }
-    if category in {"chemical", "animal_derived"}:
+    if template_id in {"chemical_material_agreement", "animal_material_agreement"}:
         missing_fields.extend(_missing_text(information, AUTM_REQUIRED_TEXT_FIELDS))
-        missing_fields.extend(_missing_text(information, RECIPIENT_OFFICIAL_FIELDS))
-    elif category == "device":
-        missing_fields.extend(_missing_text(information, RECIPIENT_OFFICIAL_FIELDS))
-    elif category == "biological":
-        can_certify = information.get("recipient_scientist_can_certify_organization")
-        if not isinstance(can_certify, bool):
-            missing_fields.append("recipient_scientist_can_certify_organization")
-        elif not can_certify:
-            requires_recipient_official = True
-            missing_fields.extend(_missing_text(information, RECIPIENT_OFFICIAL_FIELDS))
+
+    signer_plan = build_signer_plan(template_id, information, strict=False)
+    missing_fields.extend(signer_plan.missing_fields)
 
     for field_id in ("recipient_pays_shipping", "material_provided_at_no_cost"):
         if not isinstance(information.get(field_id), bool):
@@ -95,14 +86,15 @@ def evaluate_agreement_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
     if information.get("material_provided_at_no_cost") is False:
         review_reasons.append("Provider material is not supplied at no cost.")
 
-    email_field_labels = {
-        "recipient_scientist_email": "Recipient Scientist Email",
-        "provider_scientist_email": "Provider Scientist signing email",
-    }
-    if requires_recipient_official:
-        email_field_labels["recipient_authorized_official_email"] = (
-            "Recipient Authorized Official signing email"
+    email_field_labels: dict[str, str] = {}
+    for signer in signer_plan.signers:
+        field_id = f"{signer.party}_email"
+        label = (
+            "Recipient Scientist Email"
+            if signer.party == "recipient_scientist"
+            else f"{signer.label} signing email"
         )
+        email_field_labels[field_id] = label
     validation_errors = email_errors(information, email_field_labels)
 
     if missing_fields or validation_errors:

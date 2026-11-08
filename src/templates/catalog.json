@@ -1,32 +1,32 @@
 [
   {
-    "id": "autm_chemical",
-    "display_name": "AUTM MTA for Chemical Materials",
-    "source_file": "reference_files/Template_AUTM_MTA_for_Chemical_Materials.docx",
+    "id": "chemical_material_agreement",
+    "display_name": "Chemical Material Agreement",
+    "source_file": "reference_files/Template_Chemical_Materials.docx",
     "material_categories": ["chemical"],
     "required_context": {},
     "automation_enabled": true
   },
   {
-    "id": "autm_biological",
-    "display_name": "AUTM MTA for Biological Materials",
-    "source_file": "reference_files/Template_AUTM_MTA_for_Biological_Materials.docx",
+    "id": "animal_material_agreement",
+    "display_name": "Animal Material Agreement",
+    "source_file": "reference_files/Template_AUTM_Animal.docx",
     "material_categories": ["animal_derived"],
     "required_context": {},
     "automation_enabled": true
   },
   {
-    "id": "simple_letter_agreement",
-    "display_name": "Simple Letter Agreement",
-    "source_file": "reference_files/Template_Simple Letter Agreement.docx",
+    "id": "device_material_agreement",
+    "display_name": "Device Material Agreement",
+    "source_file": "reference_files/Template_Simple Letter_Device.docx",
     "material_categories": ["device"],
     "required_context": {},
     "automation_enabled": true
   },
   {
-    "id": "ubmta_implementing_letter",
-    "display_name": "UBMTA Implementing Letter",
-    "source_file": "reference_files/Template_UBMTA.docx",
+    "id": "biological_material_agreement",
+    "display_name": "Biological Material Agreement",
+    "source_file": "reference_files/Template_UBMTA_Biological.docx",
     "material_categories": ["biological"],
     "required_context": {},
     "automation_enabled": true

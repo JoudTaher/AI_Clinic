@@ -1,12 +1,13 @@
 [theme]
-base = "light"
+base = "dark"
 
-# University of Michigan signature colors.
-primaryColor = "#00274C"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F2F2F2"
-textColor = "#00274C"
-linkColor = "#2F65A7"
+# University of Michigan signature colors. Michigan Blue is the application
+# surface; Maize is reserved for high-visibility accents and links.
+primaryColor = "#2F65A7"
+backgroundColor = "#00274C"
+secondaryBackgroundColor = "#12355B"
+textColor = "#FFFFFF"
+linkColor = "#FFCB05"
 
 # University of Michigan supporting colors used by native status elements.
 redColor = "#9A3324"
@@ -29,9 +30,10 @@ chartCategoricalColors = [
   "#A5A508",
 ]
 
-dataframeHeaderBackgroundColor = "#00274C"
-dataframeHeaderTextColor = "#FFFFFF"
-borderColor = "#B9C6D0"
+dataframeHeaderBackgroundColor = "#FFCB05"
+dataframeHeaderTextColor = "#00274C"
+codeBackgroundColor = "#12355B"
+borderColor = "#75988D"
 baseRadius = "8px"
 buttonRadius = "8px"
 showWidgetBorder = true

@@ -3,156 +3,45 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from src.adapters.paths import safe_identifier
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.ports import DeliveryError
 from src.request_normalization import normalize_request
-
-
-EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+from src.signing.plan import SignerPlanError, build_signer_plan
 
 
 class SignNowPackageSender:
     """Builds a local SignNow-ready manifest without making a network request."""
 
-    _AUTM_TEMPLATES = {"autm_chemical", "autm_biological"}
-
     def __init__(self, output_dir: Path) -> None:
         self.output_dir = output_dir
-
-    @staticmethod
-    def _required_text(data: Mapping[str, Any], field_id: str) -> str:
-        value = data.get(field_id)
-        if not isinstance(value, str) or not value.strip():
-            raise DeliveryError(f"Missing required signer field: {field_id}")
-        return value.strip()
-
-    @classmethod
-    def _required_email(cls, data: Mapping[str, Any], field_id: str) -> str:
-        value = cls._required_text(data, field_id)
-        if not EMAIL_PATTERN.fullmatch(value):
-            raise DeliveryError(f"Signer field must be a valid email: {field_id}")
-        return value
-
-    @classmethod
-    def _person(
-        cls,
-        data: Mapping[str, Any],
-        prefix: str,
-        roles: list[str],
-        order: int,
-        *,
-        title_mode: Literal["required", "optional", "omit"] = "required",
-    ) -> dict[str, object]:
-        raw_title = data.get(f"{prefix}_title", "")
-        if title_mode == "required":
-            title = cls._required_text(data, f"{prefix}_title")
-        elif title_mode == "optional":
-            if not isinstance(raw_title, str):
-                raise DeliveryError(f"Signer field must be text: {prefix}_title")
-            title = raw_title.strip()
-        else:
-            title = ""
-        return {
-            "email": cls._required_email(data, f"{prefix}_email"),
-            "name": cls._required_text(data, f"{prefix}_name"),
-            "order": order,
-            "roles": roles,
-            "title": title,
-        }
-
-    @classmethod
-    def _provider_official(
-        cls, information: Mapping[str, Any], role: str
-    ) -> dict[str, object]:
-        return cls._person(
-            information,
-            "provider_scientist",
-            [role],
-            2,
-            title_mode="optional",
-        )
 
     def signers_for(
         self, template_id: str, information: Mapping[str, Any]
     ) -> list[dict[str, object]]:
-        if template_id in self._AUTM_TEMPLATES:
-            return [
-                self._person(
-                    information,
-                    "recipient_authorized_official",
-                    ["recipient_authorized_signatory"],
-                    1,
-                ),
-                self._provider_official(
-                    information, "provider_authorized_signatory"
-                ),
-            ]
-
-        if template_id == "ubmta_implementing_letter":
-            can_certify = information.get(
-                "recipient_scientist_can_certify_organization"
-            )
-            if not isinstance(can_certify, bool):
-                raise DeliveryError(
-                    "Missing required signer field: "
-                    "recipient_scientist_can_certify_organization"
+        try:
+            plan = build_signer_plan(template_id, information)
+        except SignerPlanError as error:
+            details: list[str] = []
+            if error.missing_fields:
+                details.append(
+                    "Missing required signer fields: "
+                    + ", ".join(error.missing_fields)
                 )
-            scientist_roles = ["recipient_scientist"]
-            if can_certify:
-                scientist_roles.append("recipient_organization_certifier")
-            signers = [
-                self._person(
-                    information,
-                    "recipient_scientist",
-                    scientist_roles,
-                    1,
-                    title_mode="optional",
+            if error.invalid_fields:
+                details.append(
+                    "Signer fields must contain valid emails: "
+                    + ", ".join(error.invalid_fields)
                 )
-            ]
-            if not can_certify:
-                signers.append(
-                    self._person(
-                        information,
-                        "recipient_authorized_official",
-                        ["recipient_organization_certifier"],
-                        1,
-                    )
-                )
-            signers.append(
-                self._provider_official(
-                    information, "provider_organization_certifier"
-                )
-            )
-            return signers
-
-        if template_id == "simple_letter_agreement":
-            return [
-                self._person(
-                    information,
-                    "recipient_scientist",
-                    ["recipient_scientist"],
-                    1,
-                    title_mode="omit",
-                ),
-                self._person(
-                    information,
-                    "recipient_authorized_official",
-                    ["recipient_authorized_signatory"],
-                    1,
-                ),
-                self._provider_official(
-                    information, "provider_authorized_signatory"
-                ),
-            ]
-
-        raise DeliveryError(f"Unsupported signing workflow: {template_id}")
+            raise DeliveryError("; ".join(details)) from error
+        except ValueError as error:
+            raise DeliveryError(str(error)) from error
+        return [signer.as_dict() for signer in plan.signers]
 
     def send(
         self,

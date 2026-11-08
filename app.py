@@ -14,9 +14,20 @@ from src.materials import (
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
 from src.screening_report import build_screening_report, serialize_screening_report
 from src.signing import build_agreement_sender
+from src.signing.plan import build_signer_plan
+from src.templates.catalog import load_template_catalog
 
 
 st.set_page_config(page_title="Outgoing MTA Screening PoC", page_icon="📄", layout="wide")
+st.html(
+    """
+    <style>
+    h1, h2, h3 {
+        color: #FFCB05 !important;
+    }
+    </style>
+    """
+)
 
 ANSWER_OPTIONS = ("Not answered", "Yes", "No")
 ANSWER_VALUES = {"Not answered": None, "Yes": True, "No": False}
@@ -351,7 +362,16 @@ related_details = st.text_area("Other Relevant Details")
 
 selected_categories = derive_material_categories(material_types)
 selected_category = selected_categories[0] if len(selected_categories) == 1 else None
-supported_categories = {"chemical", "animal_derived", "biological", "device"}
+template_candidates = [
+    definition.template_id
+    for definition in load_template_catalog()
+    if definition.automation_enabled
+    and isinstance(selected_category, str)
+    and selected_category in definition.material_categories
+]
+selected_template_id = (
+    template_candidates[0] if len(template_candidates) == 1 else None
+)
 
 st.subheader("Agreement and Signing Information")
 st.caption(
@@ -373,16 +393,19 @@ recipient_official_email = ""
 
 recipient_pays_shipping: bool | None = None
 material_provided_at_no_cost: bool | None = None
-if selected_category in supported_categories:
+if selected_template_id is not None:
     name_left, name_right = st.columns(2)
     with name_left:
         st.caption(
-            f"Provider Scientist full name: {contact_pi_name or 'Not entered above'}"
+            "Provider Scientist full name: "
+            f"{contact_pi_name or 'Not entered above'} (from Contact PI)"
         )
     with name_right:
         st.caption(
-            "Recipient Scientist full name: "
-            f"{recipient_scientist_name or 'Not entered above'}"
+            "Recipient Scientist: "
+            f"{recipient_scientist_name or 'Not entered above'} · "
+            f"{recipient_scientist_email or 'email not entered above'} "
+            "(reused from Outgoing Material Details)"
         )
 
     agreement_left, agreement_right = st.columns(2)
@@ -395,7 +418,7 @@ if selected_category in supported_categories:
             "provider_scientist_email",
             help="Used to deliver the signing request; it is not printed in the agreement.",
         )
-        if selected_category in {"chemical", "animal_derived", "biological"}:
+        if selected_template_id != "device_material_agreement":
             recipient_scientist_title = st.text_input(
                 "Recipient Scientist academic/job title (if known)"
             )
@@ -425,7 +448,7 @@ if selected_category in supported_categories:
             "A preparation or distribution reimbursement entered above is still allowed.",
         )
 
-    if selected_category in {"chemical", "animal_derived"}:
+    if selected_template_id in {"chemical_material_agreement", "animal_material_agreement"}:
         shipping_left, shipping_right = st.columns(2)
         with shipping_left:
             shipping_recipient_name = required_text_input(
@@ -436,26 +459,36 @@ if selected_category in supported_categories:
                 "Shipping address", "shipping_address"
             )
 
-    if selected_category == "biological":
+    if selected_template_id == "biological_material_agreement":
         recipient_scientist_can_certify = answer_input(
             "Recipient Scientist authorized to certify for Recipient Organization?",
             "recipient_scientist_can_certify_organization",
         )
 
-    requires_recipient_official = selected_category in {
-        "chemical",
-        "animal_derived",
-        "device",
-    } or (
-        selected_category == "biological"
-        and recipient_scientist_can_certify is False
+    preview_information: dict[str, object] = {
+        "provider_scientist_name": contact_pi_name,
+        "provider_scientist_title": provider_scientist_title,
+        "provider_scientist_email": provider_scientist_email,
+        "recipient_scientist_name": recipient_scientist_name,
+        "recipient_scientist_title": recipient_scientist_title,
+        "recipient_scientist_email": recipient_scientist_email,
+        "recipient_scientist_can_certify_organization": (
+            recipient_scientist_can_certify
+        ),
+    }
+    preview_plan = build_signer_plan(
+        selected_template_id, preview_information, strict=False
     )
-    if requires_recipient_official:
-        official_role = (
-            "Recipient Authorized Signatory"
-            if selected_category in {"chemical", "animal_derived"}
-            else "Recipient Authorized Official"
-        )
+    official_signer = next(
+        (
+            signer
+            for signer in preview_plan.signers
+            if signer.party == "recipient_authorized_official"
+        ),
+        None,
+    )
+    if official_signer is not None:
+        official_role = official_signer.label
         official_left, official_middle, official_right = st.columns(3)
         with official_left:
             recipient_official_name = required_text_input(
@@ -470,6 +503,36 @@ if selected_category in supported_categories:
                 f"{official_role} signing email",
                 "recipient_authorized_official_email",
                 help="Used to deliver the signing request; it is not printed in the agreement.",
+            )
+
+        preview_information.update(
+            {
+                "recipient_authorized_official_name": recipient_official_name,
+                "recipient_authorized_official_title": recipient_official_title,
+                "recipient_authorized_official_email": recipient_official_email,
+            }
+        )
+        preview_plan = build_signer_plan(
+            selected_template_id, preview_information, strict=False
+        )
+
+    st.markdown("**Planned SignNow invitations**")
+    st.caption(
+        "The configured SignNow developer account sends the invitations. The email "
+        "addresses below are recipients; signing emails are not printed in the agreement."
+    )
+    if preview_plan.decision_required:
+        st.caption(
+            "Select whether the Recipient Scientist can certify for the Recipient "
+            "Organization to determine the final recipient signer plan."
+        )
+    else:
+        for signer in preview_plan.signers:
+            st.caption(
+                f"Signing order {signer.order} — {signer.label}: "
+                f"{signer.name or 'name not entered'} "
+                f"<{signer.email or 'email not entered'}> "
+                f"({signer.source_summary})."
             )
 else:
     st.info(
@@ -535,7 +598,7 @@ if submitted:
         "related_details": related_details,
     }
     agreement_information: dict[str, object] = {}
-    if selected_category in supported_categories:
+    if selected_template_id is not None:
         agreement_information.update(
             {
                 "recipient_institution_address": recipient_institution_address,
@@ -546,16 +609,16 @@ if submitted:
                 "material_provided_at_no_cost": material_provided_at_no_cost,
             }
         )
-    if selected_category in {"chemical", "animal_derived", "biological"}:
+    if selected_template_id is not None and selected_template_id != "device_material_agreement":
         agreement_information["recipient_scientist_title"] = recipient_scientist_title
-    if selected_category in {"chemical", "animal_derived"}:
+    if selected_template_id in {"chemical_material_agreement", "animal_material_agreement"}:
         agreement_information.update(
             {
                 "shipping_recipient_name": shipping_recipient_name,
                 "shipping_address": shipping_address,
             }
         )
-    if selected_category == "biological":
+    if selected_template_id == "biological_material_agreement":
         agreement_information[
             "recipient_scientist_can_certify_organization"
         ] = recipient_scientist_can_certify

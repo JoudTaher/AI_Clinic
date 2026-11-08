@@ -99,7 +99,9 @@ class OutgoingMTAPipeline:
                 audit_events=audit + ("manual_special_case_review",),
             )
 
-        agreement_readiness = evaluate_agreement_readiness(request)
+        agreement_readiness = evaluate_agreement_readiness(
+            request, template_id=selected_template
+        )
         if agreement_readiness["status"] == "missing_information":
             reasons = list(agreement_readiness["missing_fields"])
             reasons.extend(agreement_readiness["validation_errors"])
