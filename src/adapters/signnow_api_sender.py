@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -96,6 +97,37 @@ class SignNowTransport(Protocol):
     ) -> Mapping[str, Any]: ...
 
 
+def _signnow_error_detail(error: HTTPError) -> str:
+    try:
+        payload = json.loads(error.read().decode("utf-8"))
+    except (AttributeError, UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    if not isinstance(payload, Mapping):
+        return ""
+
+    candidates: list[Mapping[str, Any]] = []
+    raw_errors = payload.get("errors")
+    if isinstance(raw_errors, list):
+        candidates.extend(item for item in raw_errors if isinstance(item, Mapping))
+    candidates.append(payload)
+
+    for candidate in candidates:
+        message = next(
+            (
+                str(candidate[key]).strip()
+                for key in ("message", "error", "description")
+                if candidate.get(key) is not None and str(candidate[key]).strip()
+            ),
+            "",
+        )
+        if not message:
+            continue
+        code = candidate.get("code")
+        code_text = f" (code {code})" if code is not None else ""
+        return f"{message[:300]}{code_text}."
+    return ""
+
+
 class UrllibSignNowTransport:
     def __init__(self, settings: SignNowSettings) -> None:
         self.settings = settings
@@ -111,8 +143,12 @@ class UrllibSignNowTransport:
             with urlopen(request, timeout=self.settings.timeout_seconds) as response:
                 payload = response.read()
         except HTTPError as error:
+            method = request.get_method()
+            path = urlsplit(request.full_url).path
+            detail = _signnow_error_detail(error)
+            suffix = f" {detail}" if detail else ""
             raise DeliveryError(
-                f"SignNow rejected the request with HTTP {error.code}."
+                f"SignNow rejected {method} {path} with HTTP {error.code}.{suffix}"
             ) from error
         except (URLError, TimeoutError, OSError) as error:
             raise DeliveryError("SignNow could not be reached.") from error
@@ -215,7 +251,13 @@ def _tag(role: str, field_type: str) -> str:
 
 
 class TaggedAgreementBuilder:
-    def build(self, artifact: RenderedAgreement, destination: Path) -> list[dict[str, Any]]:
+    def build(
+        self,
+        artifact: RenderedAgreement,
+        destination: Path,
+        role_aliases: Mapping[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        aliases = role_aliases or {}
         with ZipFile(artifact.path) as source:
             root = etree.fromstring(source.read("word/document.xml"))
             roles = self._insert_tags(root, artifact.template_id)
@@ -232,7 +274,7 @@ class TaggedAgreementBuilder:
                     )
         definitions: list[dict[str, Any]] = []
         for role in roles:
-            display_role = ROLE_NAMES[role]
+            display_role = ROLE_NAMES[aliases.get(role, role)]
             definitions.extend(
                 [
                     {
@@ -422,12 +464,28 @@ class SignNowApiSender:
         signers = SignNowPackageSender(Path(".")).signers_for(
             artifact.template_id, information
         )
+        role_aliases: dict[str, str] = {}
+        for signer in signers:
+            raw_roles = signer.get("roles", [])
+            if not isinstance(raw_roles, list) or not raw_roles:
+                raise DeliveryError("The signer plan contains invalid roles.")
+            if any(
+                not isinstance(role, str) or role not in ROLE_NAMES
+                for role in raw_roles
+            ):
+                raise DeliveryError("The signer plan contains an unknown role.")
+            primary_role = raw_roles[0]
+            role_aliases.update(
+                {logical_role: primary_role for logical_role in raw_roles}
+            )
 
         descriptor, temporary_name = tempfile.mkstemp(suffix=".docx")
         os.close(descriptor)
         tagged_path = Path(temporary_name)
         try:
-            tag_definitions = self.builder.build(artifact, tagged_path)
+            tag_definitions = self.builder.build(
+                artifact, tagged_path, role_aliases=role_aliases
+            )
             uploaded = self.transport.upload(
                 "/document/fieldextract",
                 tagged_path,
@@ -445,29 +503,29 @@ class SignNowApiSender:
         invitees: list[dict[str, object]] = []
         for signer in signers:
             raw_roles = signer.get("roles", [])
-            if not isinstance(raw_roles, list):
+            if not isinstance(raw_roles, list) or not raw_roles:
                 raise DeliveryError("The signer plan contains invalid roles.")
-            for logical_role in raw_roles:
-                if not isinstance(logical_role, str) or logical_role not in ROLE_NAMES:
-                    raise DeliveryError("The signer plan contains an unknown role.")
-                role = ROLE_NAMES[logical_role]
-                role_id = role_ids.get(role)
-                if not role_id:
-                    raise DeliveryError(
-                        f"SignNow did not create the required role: {role}."
-                    )
-                invitees.append(
-                    {
-                        "email": signer["email"],
-                        "role": role,
-                        "role_id": role_id,
-                        "order": signer["order"],
-                        "reassign": "0",
-                        "decline_by_signature": "0",
-                        "reminder": 0,
-                        "expiration_days": 30,
-                    }
+            logical_role = raw_roles[0]
+            if not isinstance(logical_role, str) or logical_role not in ROLE_NAMES:
+                raise DeliveryError("The signer plan contains an unknown role.")
+            role = ROLE_NAMES[logical_role]
+            role_id = role_ids.get(role)
+            if not role_id:
+                raise DeliveryError(
+                    f"SignNow did not create the required role: {role}."
                 )
+            invitees.append(
+                {
+                    "email": signer["email"],
+                    "role": role,
+                    "role_id": role_id,
+                    "order": signer["order"],
+                    "reassign": "0",
+                    "decline_by_signature": "0",
+                    "reminder": 0,
+                    "expiration_days": 30,
+                }
+            )
 
         self.transport.request_json(
             "POST",
@@ -477,8 +535,6 @@ class SignNowApiSender:
                 "to": invitees,
                 "from": self.settings.account_email,
                 "cc": [],
-                "subject": "University of Michigan Material Transfer Agreement",
-                "message": "Please review and sign the attached material transfer agreement.",
             },
         )
         return DeliveryReceipt(

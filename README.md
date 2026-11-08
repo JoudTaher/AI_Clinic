@@ -48,6 +48,10 @@ reference_files/              approved checklist and four clean agreement templa
 
 Generated agreements and signing manifests are written under `outputs/`.
 
+## Product and technical documentation
+
+The complete current-state, signing, signed-document management, standalone-versus-integrated architecture, and roadmap reference is available in [University of Michigan Outgoing MTA Automation Product and Technical Documentation](docs/University_of_Michigan_Outgoing_MTA_Automation_Documentation.docx).
+
 ## Test
 
 ```bash

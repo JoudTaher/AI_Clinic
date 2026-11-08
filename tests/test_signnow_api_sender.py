@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from zipfile import ZipFile
 
 import pytest
@@ -12,6 +14,7 @@ from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.adapters.signnow_api_sender import (
     SignNowApiSender,
     SignNowSettings,
+    UrllibSignNowTransport,
 )
 from src.pipeline.ports import DeliveryError
 from src.templates.catalog import load_template_catalog
@@ -98,6 +101,33 @@ def settings(**overrides: Any) -> SignNowSettings:
     return SignNowSettings(**values)
 
 
+def test_http_error_reports_endpoint_and_signnow_reason(monkeypatch):
+    def reject(request, timeout):
+        del timeout
+        raise HTTPError(
+            request.full_url,
+            400,
+            "Bad Request",
+            hdrs=None,
+            fp=BytesIO(
+                b'{"errors":[{"code":65536,"message":"Invalid payload"}]}'
+            ),
+        )
+
+    monkeypatch.setattr("src.adapters.signnow_api_sender.urlopen", reject)
+    transport = UrllibSignNowTransport(settings())
+
+    with pytest.raises(
+        DeliveryError,
+        match=r"POST /document/fieldextract.*Invalid payload.*65536",
+    ):
+        transport.upload(
+            "/document/fieldextract",
+            Path(__file__),
+            {"Tags": "[]"},
+        )
+
+
 def test_disabled_sender_refuses_network_delivery(tmp_path: Path):
     request, artifact = rendered_agreement(tmp_path, "chemical")
     transport = RecordingTransport(list(ROLE_NAMES.values()))
@@ -165,6 +195,43 @@ def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path)
     assert [item["role_id"] for item in invite["payload"]["to"]] == [
         "role-1",
         "role-2",
+    ]
+    assert "subject" not in invite["payload"]
+    assert "message" not in invite["payload"]
+
+
+def test_ubmta_certifying_recipient_gets_one_invitation_for_both_roles(
+    tmp_path: Path,
+):
+    request, artifact = rendered_agreement(tmp_path, "biological")
+    request["agreement_information"][
+        "recipient_scientist_can_certify_organization"
+    ] = True
+    transport = RecordingTransport(
+        [
+            ROLE_NAMES["recipient_scientist"],
+            ROLE_NAMES["provider_organization_certifier"],
+        ]
+    )
+    sender = SignNowApiSender(settings(), transport)
+
+    sender.send("REQ-UBMTA-CERTIFYING-RECIPIENT", request, artifact)
+
+    tags = json.loads(transport.uploads[0]["fields"]["Tags"])
+    recipient_tags = [
+        item for item in tags if item["tag_name"].startswith("recipient_")
+    ]
+    assert len(recipient_tags) == 4
+    assert {item["role"] for item in recipient_tags} == {"Recipient Scientist"}
+
+    invitees = transport.requests[-1]["payload"]["to"]
+    assert [item["email"] for item in invitees] == [
+        "recipient.scientist@example.org",
+        "provider.scientist@umich.edu",
+    ]
+    assert [item["role"] for item in invitees] == [
+        "Recipient Scientist",
+        "Provider Organization Certifier",
     ]
 
 
