@@ -7,12 +7,12 @@ def test_streamlit_theme_uses_michigan_brand_palette():
     with config_path.open("rb") as config_file:
         theme = tomllib.load(config_file)["theme"]
 
-    assert theme["base"] == "dark"
-    assert theme["backgroundColor"] == "#00274C"
-    assert theme["secondaryBackgroundColor"] == "#12355B"
-    assert theme["primaryColor"] == "#2F65A7"
-    assert theme["textColor"] == "#FFFFFF"
-    assert theme["linkColor"] == "#FFCB05"
+    assert theme["base"] == "light"
+    assert theme["backgroundColor"] == "#FFFFFF"
+    assert theme["secondaryBackgroundColor"] == "#F5F5F5"
+    assert theme["primaryColor"] == "#00274C"
+    assert theme["textColor"] == "#00274C"
+    assert theme["linkColor"] == "#00274C"
     assert theme["yellowColor"] == "#FFCB05"
     assert theme["redColor"] == "#9A3324"
     assert theme["orangeColor"] == "#D86018"
