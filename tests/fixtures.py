@@ -137,6 +137,8 @@ def request_for(*categories: str) -> dict:
             for category in categories
             if category in category_material
         ]
+    if "chemical" in categories:
+        intake["chemical_structure_confidential"] = False
     agreement = deepcopy(COMPLETE_AGREEMENT_INFORMATION)
     if categories == ("animal_derived",):
         agreement["material_description"] = (

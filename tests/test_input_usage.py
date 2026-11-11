@@ -40,6 +40,14 @@ def test_semantic_inputs_are_identified_in_the_audit_map():
     ]["uses"]
 
 
+def test_chemical_structure_confidentiality_is_audit_context_not_an_eligibility_rule():
+    usage = build_input_usage(normalize_request(request_for("chemical")))
+
+    assert usage["erpm_intake"]["chemical_structure_confidential"] == {
+        "uses": ["audit_record"],
+    }
+
+
 def test_unknown_payload_field_is_not_silently_ignored():
     request = plasmid_request()
     request["erpm_intake"]["unexpected_field"] = "value"

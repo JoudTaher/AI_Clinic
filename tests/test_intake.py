@@ -49,6 +49,23 @@ def test_innovation_partnerships_file_number_is_conditional():
     assert result["missing_fields"] == ["innovation_partnerships_file_number"]
 
 
+def test_chemical_structure_confidentiality_is_required_only_for_chemical_requests():
+    chemical_request = request_for("chemical")
+    chemical_request["erpm_intake"].pop("chemical_structure_confidential")
+
+    missing = evaluate_intake_readiness(chemical_request)
+
+    assert missing["status"] == "missing_information"
+    assert missing["missing_fields"] == ["chemical_structure_confidential"]
+
+    chemical_request["erpm_intake"]["chemical_structure_confidential"] = False
+    assert evaluate_intake_readiness(chemical_request)["status"] == "ready"
+
+    biological_request = request_for("biological")
+    biological_request["erpm_intake"].pop("chemical_structure_confidential", None)
+    assert evaluate_intake_readiness(biological_request)["status"] == "ready"
+
+
 def test_invalid_recipient_scientist_email_is_reported_separately_from_missing_data():
     request = request_for("chemical")
     request["erpm_intake"]["recipient_scientist_email"] = "not an email"

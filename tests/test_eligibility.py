@@ -294,6 +294,23 @@ def test_domestic_noncommercial_nih_chemical_request_passes_eligibility():
     assert result["missing_information"] == []
 
 
+def test_chemical_structure_confidentiality_does_not_change_eligibility():
+    confidential = request_for("chemical")
+    confidential["erpm_intake"]["chemical_structure_confidential"] = True
+    not_confidential = request_for("chemical")
+    not_confidential["erpm_intake"]["chemical_structure_confidential"] = False
+
+    confidential_result = evaluate_eligibility(confidential)
+    not_confidential_result = evaluate_eligibility(not_confidential)
+
+    assert confidential_result["status"] == not_confidential_result["status"]
+    assert confidential_result["passed_checks"] == not_confidential_result["passed_checks"]
+    assert confidential_result["failed_checks"] == not_confidential_result["failed_checks"]
+    assert confidential_result["missing_information"] == not_confidential_result[
+        "missing_information"
+    ]
+
+
 def test_domestic_named_recipient_does_not_require_organization_keywords():
     request = plasmid_request()
     request["erpm_intake"].update(

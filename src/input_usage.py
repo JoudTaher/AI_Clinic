@@ -55,6 +55,7 @@ ERPM_FIELD_USES: dict[str, tuple[str, ...]] = {
         "intake_completeness",
         "eligibility_rule",
     ),
+    "chemical_structure_confidential": ("audit_record",),
     "project_administrative_home": ("intake_completeness", "routing_record"),
     "will_deposit_in_repository": ("intake_completeness", "audit_record"),
     "recipient_entity": (

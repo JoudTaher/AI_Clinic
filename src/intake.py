@@ -93,6 +93,13 @@ def evaluate_intake_readiness(request: Mapping[str, Any]) -> dict[str, Any]:
             if _missing_text(intake, field_id)
         )
 
+    raw_categories = request.get("material_categories", [])
+    categories = raw_categories if isinstance(raw_categories, list) else []
+    if "chemical" in categories and not isinstance(
+        intake.get("chemical_structure_confidential"), bool
+    ):
+        missing_fields.append("chemical_structure_confidential")
+
     if intake.get("previously_invention_report_or_licensed") is True and _missing_text(
         intake, "innovation_partnerships_file_number"
     ):

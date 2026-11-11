@@ -73,6 +73,41 @@ def test_material_types_match_the_erpm_form():
     ]
 
 
+def test_chemical_selection_shows_required_structure_confidentiality_question_only_for_chemical():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+
+    initial_labels = {element.label for element in app.selectbox}
+    assert "Is the structure of this compound confidential? *" not in initial_labels
+
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type *"
+    )
+    material_types.select("Chemical compound")
+    app.run(timeout=10)
+
+    chemical_labels = {element.label for element in app.selectbox}
+    assert "Is the structure of this compound confidential? *" in chemical_labels
+    assert not app.exception
+
+
+def test_mixed_selection_with_chemical_shows_structure_confidentiality_question():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    material_types = next(
+        element for element in app.multiselect if element.label == "Material Type *"
+    )
+    material_types.select("Chemical compound")
+    material_types.select("Device")
+    app.run(timeout=10)
+
+    assert any(
+        element.label == "Is the structure of this compound confidential? *"
+        for element in app.selectbox
+    )
+    assert not app.exception
+
+
 def test_human_material_selection_shows_only_source_form_conditionals():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)

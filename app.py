@@ -395,6 +395,7 @@ BOOLEAN_FIELD_IDS = {
     "radioactive",
     "dangerous_to_handle_store_or_use",
     "hazardous_chemical_capacity_constraint",
+    "chemical_structure_confidential",
     "will_deposit_in_repository",
     "leaving_country",
     "export_controlled",
@@ -674,6 +675,13 @@ with fields_column:
             "protocol_consent_transfer_sections",
         )
 
+    chemical_structure_confidential = None
+    if "Chemical compound" in material_types:
+        chemical_structure_confidential = answer_input(
+            "Is the structure of this compound confidential?",
+            "chemical_structure_confidential",
+        )
+
     material_agreement_fields = st.container()
 
     st.subheader("Material Safety")
@@ -950,6 +958,10 @@ with fields_column:
         "related_document_names": [],
         "related_details": related_details,
     }
+    if "Chemical compound" in material_types:
+        erpm_intake["chemical_structure_confidential"] = (
+            chemical_structure_confidential
+        )
     agreement_information: dict[str, object] = {}
     if selected_template_id is not None:
         agreement_information.update(
