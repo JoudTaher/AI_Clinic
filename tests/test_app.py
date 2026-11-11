@@ -7,10 +7,10 @@ def test_app_loads_erpm_aligned_intake_sections():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     assert not app.exception
-    assert app.title[0].value == "Outgoing MTA Automation Proof of Concept"
+    assert app.title[0].value == "Outgoing Material Transfer Agreement"
     headings = [item.value for item in app.subheader]
     assert headings[:5] == [
-        "Introduction",
+        "Project Details",
         "Personnel",
         "Material Details",
         "Material Safety",
@@ -177,13 +177,11 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
     assert "Recipient Scientist academic/job title (if known)" in labels
     assert "Provider Scientist title" not in labels
     assert "Recipient Scientist title" not in labels
-    captions = [item.value for item in app.caption]
-    assert "Provider Scientist full name: Dr. Provider (from Contact PI)" in captions
-    assert (
-        "Recipient Scientist: Dr. Recipient · recipient@example.org "
-        "(reused from Outgoing Material Details)"
-        in captions
-    )
+    assert sum(item.label == "Contact PI *" for item in app.text_input) == 1
+    assert sum(item.label == "Recipient Scientist Name *" for item in app.text_input) == 1
+    assert any("Please recheck the form" in item.value for item in app.info)
+    assert not any("signer-summary" in str(item.proto) and "<section" in str(item.proto)
+                   for item in app.get("html"))
 
 
 def test_ubmta_shows_exact_signnow_invitation_sources():
@@ -216,18 +214,41 @@ def test_ubmta_shows_exact_signnow_invitation_sources():
     ).select("Yes")
     app.run(timeout=10)
 
-    captions = [item.value for item in app.caption]
-    assert (
-        "Signing order 1 — Recipient Scientist: Dr. Recipient "
-        "<recipient@example.org> (from Outgoing Material Details)."
-        in captions
-    )
-    assert (
-        "Signing order 2 — Provider Scientist: Dr. Provider "
-        "<provider@umich.edu> (name from Contact PI; signing email from "
-        "Agreement and Signing Information)."
-        in captions
-    )
+    for item in app.text_input:
+        if item.label == "Project Title *":
+            item.set_value("Research transfer")
+        elif item.label == "Primary Research Administrator *":
+            item.set_value("Research Administrator")
+        elif item.label == "Project Administrative Home *":
+            item.set_value("Research Department")
+        elif item.label == "Recipient Entity full name *":
+            item.set_value("Example University")
+        elif item.label.startswith("What reimbursement"):
+            item.set_value("None")
+    for item in app.text_area:
+        if item.label == "Recipient Organization address *":
+            item.set_value("100 Research Way, Ann Arbor, MI 48109")
+        elif item.label == "Original Material description *":
+            item.set_value("Synthetic research plasmid")
+        elif item.label.startswith("Recipient's experimental plan"):
+            item.set_value("Internal noncommercial laboratory research")
+    app.number_input[0].set_value(1)
+    for item in app.selectbox:
+        if item.value == "Not answered":
+            item.select("Yes" if item.label.startswith(("Will the Recipient Scientist pay", "Will the Provider Scientist provide")) else "No")
+    app.run(timeout=10)
+    assert not app.exception
+    previews = [str(item.proto) for item in app.get("html")]
+    recipient = next(item for item in previews if 'Signing order 1' in item)
+    provider = next(item for item in previews if 'Signing order 2' in item)
+    assert "From Personnel" in [item.value for item in app.caption]
+    assert "From Outgoing Material Details" in [item.value for item in app.caption]
+    assert all(value in recipient for value in (
+        "Recipient Scientist", "Dr. Recipient", "recipient@example.org",
+    ))
+    assert all(value in provider for value in (
+        "Provider Scientist", "Dr. Provider", "provider@umich.edu",
+    ))
 
 
 def test_autm_shows_autm_shipping_and_signatory_entries():
