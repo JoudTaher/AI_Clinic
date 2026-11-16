@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -37,6 +38,13 @@ def signature_field_codes(path: Path) -> list[str]:
         (node.text or "").strip()
         for node in signature_table.xpath(".//w:instrText", namespaces=namespace)
     ]
+
+
+def drawing_count(path: Path) -> int:
+    with ZipFile(path) as package:
+        root = etree.fromstring(package.read("word/document.xml"))
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    return len(root.xpath(".//w:drawing | .//w:pict", namespaces=namespace))
 
 
 def paragraph_containing(root: etree._Element, marker: str) -> etree._Element:
@@ -135,16 +143,61 @@ def test_autm_renderer_populates_and_activates_transmittal_fee_term(
 def test_autm_renderer_populates_authorized_signatory_names_and_titles(
     tmp_path: Path, category: str, template_id: str
 ):
-    artifact = DocxAgreementRenderer(tmp_path).render(
+    artifact = DocxAgreementRenderer(
+        tmp_path, signed_on=date(2026, 11, 15)
+    ).render(
         "REQ-AUTM-SIGNERS", template(template_id), request_for(category)
     )
 
     signing_table = Document(artifact.path).tables[3]
 
-    assert "Dr. Provider" in signing_table.cell(2, 0).text
-    assert "Professor" in signing_table.cell(3, 0).text
+    assert "Maggie Swift" in signing_table.cell(2, 0).text
+    assert "Technology Transfer Associate Director" in signing_table.cell(3, 0).text
+    assert "November 15, 2026" in signing_table.cell(4, 0).text
     assert "Alex Official" in signing_table.cell(2, 1).text
     assert "Director of Research Agreements" in signing_table.cell(3, 1).text
+
+
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "chemical_material_agreement"),
+        ("animal_derived", "animal_material_agreement"),
+    ],
+)
+def test_autm_population_preserves_embedded_provider_signature(
+    tmp_path: Path, category: str, template_id: str
+):
+    definition = template(template_id)
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "REQ-AUTM-SIGNATURE", definition, request_for(category)
+    )
+
+    assert drawing_count(definition.source_path) > 0
+    assert drawing_count(artifact.path) == drawing_count(definition.source_path)
+
+
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "chemical_material_agreement"),
+        ("animal_derived", "animal_material_agreement"),
+        ("biological", "biological_material_agreement"),
+        ("device", "device_material_agreement"),
+    ],
+)
+def test_every_agreement_keeps_provider_scientist_separate_from_fixed_signer(
+    tmp_path: Path, category: str, template_id: str
+):
+    artifact = DocxAgreementRenderer(
+        tmp_path, signed_on=date(2026, 11, 15)
+    ).render("REQ-PRESIGNED", template(template_id), request_for(category))
+
+    text = document_text(artifact.path)
+    assert "Dr. Provider" in text
+    assert "Maggie Swift" in text
+    assert "Technology Transfer Associate Director" in text
+    assert "November 15, 2026" in text
 
 
 def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Path):

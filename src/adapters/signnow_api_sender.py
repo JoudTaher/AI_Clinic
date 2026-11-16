@@ -26,9 +26,7 @@ from src.request_normalization import normalize_request
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS = {"w": WORD_NS}
 ROLE_NAMES = {
-    "provider_authorized_signatory": "Provider Authorized Signatory",
     "recipient_authorized_signatory": "Recipient Authorized Signatory",
-    "provider_organization_certifier": "Provider Organization Certifier",
     "recipient_scientist": "Recipient Scientist",
     "recipient_organization_certifier": "Recipient Organization Certifier",
 }
@@ -316,38 +314,29 @@ class TaggedAgreementBuilder:
             if "Provider Authorized Signatory" not in table_text:
                 continue
             rows = table.xpath("./w:tr", namespaces=NS)
-            for column, role in enumerate(
-                ("provider_authorized_signatory", "recipient_authorized_signatory")
-            ):
-                for row_index, field_type in ((1, "signature"), (4, "date")):
-                    cells = rows[row_index].xpath("./w:tc", namespaces=NS)
-                    paragraphs = cells[column].xpath("./w:p", namespaces=NS)
-                    target = paragraphs[0]
-                    _set_paragraph_text(target, _tag(role, field_type))
-            return [
-                "provider_authorized_signatory",
-                "recipient_authorized_signatory",
-            ]
+            role = "recipient_authorized_signatory"
+            for row_index, field_type in ((1, "signature"), (4, "date")):
+                cells = rows[row_index].xpath("./w:tc", namespaces=NS)
+                paragraphs = cells[1].xpath("./w:p", namespaces=NS)
+                target = paragraphs[0]
+                _set_paragraph_text(target, _tag(role, field_type))
+            return [role]
         raise DeliveryError("The AUTM signing table could not be located.")
 
     @staticmethod
     def _insert_ubmta(root: etree._Element) -> list[str]:
-        roles = [
-            "provider_organization_certifier",
-            "recipient_scientist",
-            "recipient_organization_certifier",
-        ]
+        roles = ["recipient_scientist", "recipient_organization_certifier"]
         active_role: str | None = None
         seen: set[tuple[str, str]] = set()
         for paragraph in root.xpath(".//w:body/w:p", namespaces=NS):
             text = _paragraph_text(paragraph).strip()
             upper = text.upper()
             if upper == "PROVIDER ORGANIZATION CERTIFICATION":
-                active_role = roles[0]
+                active_role = None
             elif upper == "RECIPIENT SCIENTIST":
-                active_role = roles[1]
+                active_role = roles[0]
             elif upper == "RECIPIENT ORGANIZATION CERTIFICATION":
-                active_role = roles[2]
+                active_role = roles[1]
             elif active_role and text.startswith("Signature:"):
                 _set_paragraph_text(
                     paragraph, f"   Signature:\t{_tag(active_role, 'signature')}"
@@ -363,22 +352,19 @@ class TaggedAgreementBuilder:
 
     @staticmethod
     def _insert_simple_letter(root: etree._Element) -> list[str]:
-        provider_role = "provider_authorized_signatory"
         scientist_role = "recipient_scientist"
         line_paragraphs = [
             paragraph
             for paragraph in root.xpath(".//w:body/w:p", namespaces=NS)
             if "______________________________________" in _paragraph_text(paragraph)
         ]
-        if len(line_paragraphs) != 2:
+        if not line_paragraphs:
             raise DeliveryError("The Simple Letter signature lines could not be located.")
-        for paragraph, role in zip(
-            line_paragraphs, (provider_role, scientist_role), strict=True
-        ):
-            _set_paragraph_text(
-                paragraph,
-                f"        {_tag(role, 'signature')}\t\t{_tag(role, 'date')}",
-            )
+        _set_paragraph_text(
+            line_paragraphs[-1],
+            f"        {_tag(scientist_role, 'signature')}\t\t"
+            f"{_tag(scientist_role, 'date')}",
+        )
 
         official_role = "recipient_authorized_signatory"
         official_found = False
@@ -400,7 +386,7 @@ class TaggedAgreementBuilder:
             raise DeliveryError(
                 "The Simple Letter authorized-official signing line could not be located."
             )
-        return [provider_role, official_role, scientist_role]
+        return [official_role, scientist_role]
 
 
 def _document_id(payload: Mapping[str, Any]) -> str:

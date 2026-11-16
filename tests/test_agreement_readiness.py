@@ -181,17 +181,15 @@ def test_recipient_not_paying_shipping_is_still_complete_standard_information():
     }
 
 
-def test_invalid_signing_email_stops_agreement_preparation_with_specific_error():
+def test_provider_scientist_signing_email_is_not_required_for_one_sided_delivery():
     request = plasmid_request()
-    request["agreement_information"]["provider_scientist_email"] = "provider-at-umich"
+    request["agreement_information"].pop("provider_scientist_email", None)
 
     result = evaluate_agreement_readiness(request)
 
-    assert result["status"] == "missing_information"
-    assert "provider_scientist_email" not in result["missing_fields"]
-    assert result["validation_errors"] == {
-        "provider_scientist_email": "Enter a valid Provider Scientist signing email."
-    }
+    assert result["status"] == "ready"
+    assert result["missing_fields"] == []
+    assert result["validation_errors"] == {}
 
 
 def test_special_case_cost_term_requires_manual_review():

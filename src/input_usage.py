@@ -20,7 +20,6 @@ ERPM_FIELD_USES: dict[str, tuple[str, ...]] = {
     "contact_pi_name": (
         "intake_completeness",
         "agreement_population",
-        "signing_package",
     ),
     "primary_research_administrator_name": (
         "intake_completeness",
@@ -134,9 +133,8 @@ AGREEMENT_FIELD_USES: dict[str, tuple[str, ...]] = {
         "signing_package",
     ),
     "recipient_authorized_official_email": ("signing_package",),
-    "provider_scientist_name": ("agreement_population", "signing_package"),
-    "provider_scientist_title": ("agreement_population", "signing_package"),
-    "provider_scientist_email": ("signing_package",),
+    "provider_scientist_name": ("agreement_population",),
+    "provider_scientist_title": ("agreement_population",),
     "material_description": ("semantic_eligibility", "agreement_population"),
     "recipient_research_purpose": (
         "semantic_eligibility",
@@ -157,7 +155,6 @@ AGREEMENT_COMMON_FIELDS = {
     "recipient_scientist_email",
     "provider_scientist_name",
     "provider_scientist_title",
-    "provider_scientist_email",
     "material_description",
     "recipient_research_purpose",
     "requested_duration",

@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from zipfile import ZipFile
 
 import pytest
+from lxml import etree
 
 from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.adapters.signnow_api_sender import (
@@ -22,9 +23,7 @@ from tests.fixtures import request_for
 
 
 ROLE_NAMES = {
-    "provider_authorized_signatory": "Provider Authorized Signatory",
     "recipient_authorized_signatory": "Recipient Authorized Signatory",
-    "provider_organization_certifier": "Provider Organization Certifier",
     "recipient_scientist": "Recipient Scientist",
     "recipient_organization_certifier": "Recipient Organization Certifier",
 }
@@ -156,7 +155,6 @@ def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path)
     request, artifact = rendered_agreement(tmp_path, "chemical")
     roles = [
         ROLE_NAMES["recipient_authorized_signatory"],
-        ROLE_NAMES["provider_authorized_signatory"],
     ]
     transport = RecordingTransport(roles)
     sender = SignNowApiSender(settings(), transport)
@@ -172,7 +170,25 @@ def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path)
 
     upload = transport.uploads[0]
     assert upload["path"] == "/document/fieldextract"
-    assert "{{provider_authorized_signatory_signature}}" in upload["document_xml"]
+    assert "{{provider_authorized_signatory_signature}}" not in upload["document_xml"]
+    uploaded_root = etree.fromstring(upload["document_xml"].encode("utf-8"))
+    uploaded_text = "".join(
+        uploaded_root.xpath(
+            ".//w:t/text()",
+            namespaces={
+                "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            },
+        )
+    )
+    assert "Maggie Swift" in uploaded_text
+    assert len(
+        uploaded_root.xpath(
+            ".//w:drawing | .//w:pict",
+            namespaces={
+                "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            },
+        )
+    ) == 1
     assert "{{recipient_authorized_signatory_date}}" in upload["document_xml"]
     tag_definitions = json.loads(upload["fields"]["Tags"])
     assert {item["role"] for item in tag_definitions} == set(roles)
@@ -189,12 +205,10 @@ def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path)
     assert invite["payload"]["from"] == "mta-sender@umich.edu"
     assert [item["email"] for item in invite["payload"]["to"]] == [
         "recipient.official@example.org",
-        "provider.scientist@umich.edu",
     ]
-    assert [item["order"] for item in invite["payload"]["to"]] == [1, 2]
+    assert [item["order"] for item in invite["payload"]["to"]] == [1]
     assert [item["role_id"] for item in invite["payload"]["to"]] == [
         "role-1",
-        "role-2",
     ]
     assert "subject" not in invite["payload"]
     assert "message" not in invite["payload"]
@@ -210,7 +224,6 @@ def test_ubmta_certifying_recipient_gets_one_invitation_for_both_roles(
     transport = RecordingTransport(
         [
             ROLE_NAMES["recipient_scientist"],
-            ROLE_NAMES["provider_organization_certifier"],
         ]
     )
     sender = SignNowApiSender(settings(), transport)
@@ -227,11 +240,9 @@ def test_ubmta_certifying_recipient_gets_one_invitation_for_both_roles(
     invitees = transport.requests[-1]["payload"]["to"]
     assert [item["email"] for item in invitees] == [
         "recipient.scientist@example.org",
-        "provider.scientist@umich.edu",
     ]
     assert [item["role"] for item in invitees] == [
         "Recipient Scientist",
-        "Provider Organization Certifier",
     ]
 
 
@@ -243,7 +254,6 @@ def test_ubmta_certifying_recipient_gets_one_invitation_for_both_roles(
             [
                 "Recipient Scientist",
                 "Recipient Organization Certifier",
-                "Provider Organization Certifier",
             ],
         ),
         (
@@ -251,7 +261,6 @@ def test_ubmta_certifying_recipient_gets_one_invitation_for_both_roles(
             [
                 "Recipient Scientist",
                 "Recipient Authorized Signatory",
-                "Provider Authorized Signatory",
             ],
         ),
     ],
@@ -275,10 +284,10 @@ def test_each_template_uses_its_own_signature_roles(
 
 def test_missing_signnow_role_stops_before_invitation(tmp_path: Path):
     request, artifact = rendered_agreement(tmp_path, "chemical")
-    transport = RecordingTransport(["Recipient Authorized Signatory"])
+    transport = RecordingTransport([])
     sender = SignNowApiSender(settings(), transport)
 
-    with pytest.raises(DeliveryError, match="Provider Authorized Signatory"):
+    with pytest.raises(DeliveryError, match="Recipient Authorized Signatory"):
         sender.send("REQ-ROLE-MISSING", request, artifact)
 
     assert not any(item["method"] == "POST" for item in transport.requests)

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from src.agreement_review import AgreementConfirmation
 from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.adapters.signnow_package_sender import SignNowPackageSender
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
@@ -25,7 +26,22 @@ def test_real_standard_workflow_creates_agreement_and_signing_package(
         sender=SignNowPackageSender(tmp_path / "signing"),
     )
 
-    result = pipeline.run(request_for(category))
+    request = request_for(category)
+    review = pipeline.run(request)
+
+    assert review.status == "review_required"
+    assert review.selected_template == template_id
+    assert review.review_reference
+    assert review.artifact_path
+
+    result = pipeline.run(
+        request,
+        AgreementConfirmation(
+            reference=review.review_reference,
+            template_id=template_id,
+            artifact_path=Path(review.artifact_path),
+        ),
+    )
 
     assert result.status == "prepared_for_signature"
     assert result.selected_template == template_id

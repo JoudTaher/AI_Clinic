@@ -49,7 +49,6 @@ COMPLETE_AGREEMENT_INFORMATION = {
     "recipient_authorized_official_email": "recipient.official@example.org",
     "provider_scientist_name": "Dr. Provider",
     "provider_scientist_title": "Professor",
-    "provider_scientist_email": "provider.scientist@umich.edu",
     "material_description": "Synthetic plasmid pExample",
     "recipient_research_purpose": "Non-commercial laboratory research",
     "requested_duration": "3 years",

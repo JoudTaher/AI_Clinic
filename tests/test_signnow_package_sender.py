@@ -16,7 +16,7 @@ def artifact(tmp_path: Path, template_id: str) -> RenderedAgreement:
 
 
 @pytest.mark.parametrize("template_id", ["chemical_material_agreement", "animal_material_agreement"])
-def test_autm_package_has_recipient_then_delegated_pi_signers(
+def test_autm_package_has_only_recipient_side_signer(
     tmp_path: Path, template_id: str
 ):
     sender = SignNowPackageSender(tmp_path / "signing")
@@ -37,12 +37,11 @@ def test_autm_package_has_recipient_then_delegated_pi_signers(
         "agreement_rendered",
         "signing_package_prepared",
     ]
-    assert [signer["order"] for signer in manifest["signers"]] == [1, 2]
+    assert [signer["order"] for signer in manifest["signers"]] == [1]
     assert [signer["roles"] for signer in manifest["signers"]] == [
         ["recipient_authorized_signatory"],
-        ["provider_authorized_signatory"],
     ]
-    assert manifest["signers"][1]["email"] == "provider.scientist@umich.edu"
+    assert manifest["signers"][0]["email"] == "recipient.official@example.org"
     assert manifest["document"]["sha256"]
     assert "agreement_information" not in json.dumps(manifest)
 
@@ -60,9 +59,8 @@ def test_ubmta_package_assigns_visible_signature_roles_and_order(tmp_path: Path)
     assert [signer["roles"] for signer in manifest["signers"]] == [
         ["recipient_scientist"],
         ["recipient_organization_certifier"],
-        ["provider_organization_certifier"],
     ]
-    assert [signer["order"] for signer in manifest["signers"]] == [1, 1, 2]
+    assert [signer["order"] for signer in manifest["signers"]] == [1, 1]
 
 
 def test_signing_package_allows_optional_provider_and_recipient_titles(tmp_path: Path):
@@ -79,7 +77,12 @@ def test_signing_package_allows_optional_provider_and_recipient_titles(tmp_path:
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
     assert manifest["signers"][0]["title"] == ""
-    assert manifest["signers"][-1]["title"] == ""
+    assert manifest["signers"][1]["title"] == "Director of Research Agreements"
+    assert all(
+        "provider" not in role
+        for signer in manifest["signers"]
+        for role in signer["roles"]
+    )
 
 
 def test_ubmta_combines_recipient_roles_when_scientist_can_certify(tmp_path: Path):
@@ -101,7 +104,7 @@ def test_ubmta_combines_recipient_roles_when_scientist_can_certify(tmp_path: Pat
         "recipient_organization_certifier",
     ]
     assert manifest["signers"][0]["email"] == "recipient.scientist@example.org"
-    assert len(manifest["signers"]) == 2
+    assert len(manifest["signers"]) == 1
 
 
 def test_missing_recipient_signer_data_does_not_write_manifest(tmp_path: Path):
@@ -120,14 +123,12 @@ def test_missing_signer_error_reports_every_missing_identity_field(tmp_path: Pat
     request = request_for("chemical")
     information = request["agreement_information"]
     information["recipient_authorized_official_email"] = ""
-    request["erpm_intake"]["contact_pi_name"] = ""
     sender = SignNowPackageSender(tmp_path / "signing")
 
     with pytest.raises(DeliveryError) as caught:
         sender.send("REQ-MISSING-SIGNERS", request, artifact(tmp_path, "chemical_material_agreement"))
 
     assert "recipient_authorized_official_email" in str(caught.value)
-    assert "provider_scientist_name" in str(caught.value)
 
 
 def test_simple_letter_package_matches_visible_signature_roles(tmp_path: Path):
@@ -143,9 +144,8 @@ def test_simple_letter_package_matches_visible_signature_roles(tmp_path: Path):
     assert [signer["roles"] for signer in manifest["signers"]] == [
         ["recipient_scientist"],
         ["recipient_authorized_signatory"],
-        ["provider_authorized_signatory"],
     ]
-    assert [signer["order"] for signer in manifest["signers"]] == [1, 1, 2]
+    assert [signer["order"] for signer in manifest["signers"]] == [1, 1]
 
 
 def test_simple_letter_ignores_stale_recipient_scientist_title(tmp_path: Path):

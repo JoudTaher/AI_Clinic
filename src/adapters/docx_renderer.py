@@ -4,14 +4,20 @@ import os
 import tempfile
 from collections.abc import Mapping
 from copy import deepcopy
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from lxml import etree
 
 from src.adapters.paths import safe_identifier
-from src.agreements.data import AgreementData
+from src.agreements.data import (
+    AgreementData,
+    PROVIDER_AUTHORIZED_SIGNATORY_NAME,
+    PROVIDER_AUTHORIZED_SIGNATORY_TITLE,
+)
 from src.pipeline.models import RenderedAgreement
 from src.pipeline.ports import AgreementRenderError
 from src.request_normalization import normalize_request
@@ -134,8 +140,17 @@ class DocxAgreementRenderer:
         "animal_material_agreement",
     }
 
-    def __init__(self, output_dir: Path) -> None:
+    def __init__(self, output_dir: Path, signed_on: date | None = None) -> None:
         self.output_dir = output_dir
+        self.signed_on = signed_on or datetime.now(
+            ZoneInfo("America/Detroit")
+        ).date()
+
+    @property
+    def provider_signature_date(self) -> str:
+        return (
+            f"{self.signed_on:%B} {self.signed_on.day}, {self.signed_on.year}"
+        )
 
     def render(
         self,
@@ -161,11 +176,13 @@ class DocxAgreementRenderer:
         with ZipFile(template.source_path) as source:
             root = etree.fromstring(source.read("word/document.xml"))
             if template.template_id in self._AUTM_TEMPLATE_IDS:
-                self._populate_autm(root, data)
+                self._populate_autm(root, data, self.provider_signature_date)
             elif template.template_id == "biological_material_agreement":
-                self._populate_ubmta(root, data)
+                self._populate_ubmta(root, data, self.provider_signature_date)
             else:
-                self._populate_simple_letter(root, data)
+                self._populate_simple_letter(
+                    root, data, self.provider_signature_date
+                )
             populated_xml = etree.tostring(
                 root, xml_declaration=True, encoding="UTF-8", standalone=True
             )
@@ -204,7 +221,9 @@ class DocxAgreementRenderer:
         return cells[column]
 
     @classmethod
-    def _populate_autm(cls, root: etree._Element, data: AgreementData) -> None:
+    def _populate_autm(
+        cls, root: etree._Element, data: AgreementData, provider_signature_date: str
+    ) -> None:
         tables = root.xpath(".//w:tbl", namespaces=NS)
         values = (
             (0, 1, 1, data.provider_organization),
@@ -250,13 +269,26 @@ class DocxAgreementRenderer:
                     " shall be paid",
                     data.transmittal_fee,
                 )
-            signer_values = (
-                (2, 0, data.provider_scientist_name, "Print Name"),
-                (3, 0, data.provider_scientist_title, "Title"),
+            provider_name_cell = cls._cell(tables, 3, 2, 0)
+            provider_title_cell = cls._cell(tables, 3, 3, 0)
+            if PROVIDER_AUTHORIZED_SIGNATORY_NAME not in _text(provider_name_cell):
+                raise UnsupportedTemplateError(
+                    "The approved provider authorized signatory name is missing"
+                )
+            if PROVIDER_AUTHORIZED_SIGNATORY_TITLE not in _text(provider_title_cell):
+                raise UnsupportedTemplateError(
+                    "The approved provider authorized signatory title is missing"
+                )
+            _set_cell_text(
+                cls._cell(tables, 3, 4, 0),
+                f"{provider_signature_date}\nDate",
+                font_size_half_points=18,
+            )
+            recipient_signer_values = (
                 (2, 1, data.recipient_authorized_official_name, "Print Name"),
                 (3, 1, data.recipient_authorized_official_title, "Title"),
             )
-            for row, column, value, label in signer_values:
+            for row, column, value, label in recipient_signer_values:
                 signer_cell = cls._cell(tables, 3, row, column)
                 _set_cell_text(
                     signer_cell,
@@ -404,7 +436,9 @@ class DocxAgreementRenderer:
         )
 
     @classmethod
-    def _populate_ubmta(cls, root: etree._Element, data: AgreementData) -> None:
+    def _populate_ubmta(
+        cls, root: etree._Element, data: AgreementData, provider_signature_date: str
+    ) -> None:
         recipient_org = cls._nth_starting(root, "Organization:", 1)
         _replace_paragraph_text(
             recipient_org, f"Organization:\t{data.recipient_organization}"
@@ -452,19 +486,27 @@ class DocxAgreementRenderer:
             root, "PROVIDER ORGANIZATION CERTIFICATION", "Name:"
         )
         _replace_paragraph_text(
-            provider_cert_name, f"Name:\t\t{data.provider_scientist_name}"
+            provider_cert_name,
+            f"Name:\t\t{PROVIDER_AUTHORIZED_SIGNATORY_NAME}",
         )
         provider_cert_title = cls._line_after_heading(
             root, "PROVIDER ORGANIZATION CERTIFICATION", "Title:"
         )
         _replace_paragraph_text(
-            provider_cert_title, f"   Title:\t\t{data.provider_scientist_title}"
+            provider_cert_title,
+            f"   Title:\t\t{PROVIDER_AUTHORIZED_SIGNATORY_TITLE}",
         )
         provider_cert_address = cls._line_after_heading(
             root, "PROVIDER ORGANIZATION CERTIFICATION", "Address:"
         )
         _replace_paragraph_text(
             provider_cert_address, f"  Address:\t{data.provider_address}"
+        )
+        provider_cert_date = cls._line_after_heading(
+            root, "PROVIDER ORGANIZATION CERTIFICATION", "Date:"
+        )
+        _replace_paragraph_text(
+            provider_cert_date, f"  Date:\t\t{provider_signature_date}"
         )
 
         recipient_certifier_name = (
@@ -503,7 +545,10 @@ class DocxAgreementRenderer:
 
     @classmethod
     def _populate_simple_letter(
-        cls, root: etree._Element, data: AgreementData
+        cls,
+        root: etree._Element,
+        data: AgreementData,
+        provider_signature_date: str,
     ) -> None:
         material = cls._paragraph_after_heading_prefix(
             root,
@@ -524,17 +569,24 @@ class DocxAgreementRenderer:
         try:
             _set_cell_text(
                 cls._cell(tables, 0, 0, 1),
-                data.provider_scientist_name,
+                "\n".join(
+                    value
+                    for value in (
+                        data.provider_scientist_name,
+                        data.provider_scientist_title,
+                    )
+                    if value
+                ),
                 preserve_run_formatting=False,
             )
             _set_cell_text(
                 cls._cell(tables, 0, 4, 1),
-                data.provider_scientist_name,
+                PROVIDER_AUTHORIZED_SIGNATORY_NAME,
                 preserve_run_formatting=False,
             )
             _set_cell_text(
                 cls._cell(tables, 0, 5, 1),
-                data.provider_scientist_title,
+                PROVIDER_AUTHORIZED_SIGNATORY_TITLE,
                 preserve_run_formatting=False,
             )
             _set_cell_text(
@@ -566,3 +618,16 @@ class DocxAgreementRenderer:
             raise UnsupportedTemplateError(
                 "The Simple Letter template structure does not match the approved slot map"
             ) from error
+
+        signature_lines = [
+            paragraph
+            for paragraph in cls._paragraphs(root)
+            if "______________________________________" in _text(paragraph)
+        ]
+        if len(signature_lines) != 2:
+            raise UnsupportedTemplateError(
+                "The Simple Letter signature lines could not be located"
+            )
+        _replace_paragraph_text(
+            signature_lines[0], f"        \t\t{provider_signature_date}"
+        )

@@ -3,12 +3,17 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
+from src.agreement_review import (
+    AgreementConfirmation,
+    build_agreement_review,
+)
 from src.agreement_readiness import evaluate_agreement_readiness
 from src.eligibility import evaluate_eligibility
 from src.intake import evaluate_intake_readiness
-from src.pipeline.models import PipelineResult
+from src.pipeline.models import PipelineResult, RenderedAgreement
 from src.pipeline.ports import (
     AgreementRenderError,
     AgreementRenderer,
@@ -54,6 +59,7 @@ class OutgoingMTAPipeline:
     def run(
         self,
         request: Mapping[str, Any],
+        confirmation: AgreementConfirmation | None = None,
     ) -> PipelineResult:
         request = normalize_request(request)
         submission_basis = {
@@ -73,7 +79,14 @@ class OutgoingMTAPipeline:
         submission_id = f"mta-{request_fingerprint}"
         existing = self.store.get(submission_id)
         if existing is not None:
-            return existing
+            if existing.status != "review_required":
+                return existing
+            if (
+                confirmation is None
+                and isinstance(existing.artifact_path, str)
+                and Path(existing.artifact_path).is_file()
+            ):
+                return existing
 
         intake_readiness = evaluate_intake_readiness(request)
         if intake_readiness["status"] == "missing_information":
@@ -134,16 +147,55 @@ class OutgoingMTAPipeline:
             if definition.template_id == selected_template
         )
         approved_audit = audit + ("auto_approved:standard_rules",)
-        try:
-            artifact = self.renderer.render(submission_id, template, request)
-        except AgreementRenderError as error:
-            return PipelineResult(
-                submission_id=submission_id,
-                status="generation_failed",
-                selected_template=selected_template,
-                reasons=(str(error),),
-                audit_events=approved_audit + ("agreement_generation_failed",),
+        artifact = None
+        review = None
+        if confirmation is not None and confirmation.template_id == selected_template:
+            candidate = RenderedAgreement(
+                template_id=confirmation.template_id,
+                path=confirmation.artifact_path,
             )
+            try:
+                candidate_review = build_agreement_review(
+                    request, selected_template, candidate
+                )
+            except (AgreementRenderError, ValueError):
+                candidate_review = None
+            if (
+                candidate_review is not None
+                and candidate_review.reference == confirmation.reference
+            ):
+                artifact = candidate
+                review = candidate_review
+
+        if artifact is None:
+            try:
+                artifact = self.renderer.render(submission_id, template, request)
+                review = build_agreement_review(request, selected_template, artifact)
+            except (AgreementRenderError, ValueError) as error:
+                return PipelineResult(
+                    submission_id=submission_id,
+                    status="generation_failed",
+                    selected_template=selected_template,
+                    reasons=(str(error),),
+                    audit_events=approved_audit + ("agreement_generation_failed",),
+                )
+            result = PipelineResult(
+                submission_id=submission_id,
+                status="review_required",
+                selected_template=selected_template,
+                artifact_path=str(artifact.path),
+                review_reference=review.reference,
+                reasons=(
+                    "Review and confirm the populated agreement before signing delivery.",
+                ),
+                audit_events=approved_audit
+                + ("agreement_rendered", "final_review_required"),
+            )
+            self.store.save(result)
+            return result
+
+        if review is None:
+            raise RuntimeError("A confirmed agreement must have a review snapshot.")
         try:
             receipt = self.sender.send(submission_id, request, artifact)
         except DeliveryError as error:
@@ -168,8 +220,9 @@ class OutgoingMTAPipeline:
             artifact_path=str(artifact.path),
             delivery_reference=receipt.reference,
             delivery_mode=receipt.mode,
+            review_reference=review.reference,
             audit_events=approved_audit
-            + ("agreement_rendered", delivery_event),
+            + ("agreement_review_confirmed", delivery_event),
         )
         self.store.save(result)
         return result

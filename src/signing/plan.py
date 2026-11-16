@@ -63,9 +63,6 @@ class _SignerDefinition:
     source_summary: str
 
 
-PROVIDER_SOURCE = (
-    "name from Contact PI; signing email from Agreement and Signing Information"
-)
 RECIPIENT_SCIENTIST_SOURCE = "from Outgoing Material Details"
 RECIPIENT_OFFICIAL_SOURCE = "from Agreement and Signing Information"
 
@@ -112,17 +109,6 @@ def _build_signer(
     return signer, tuple(missing), invalid
 
 
-def _provider(role: str) -> _SignerDefinition:
-    return _SignerDefinition(
-        party="provider_scientist",
-        label="Provider Scientist",
-        roles=(role,),
-        order=2,
-        title_mode="optional",
-        source_summary=PROVIDER_SOURCE,
-    )
-
-
 def _recipient_scientist(
     roles: tuple[str, ...], *, title_mode: TitleMode = "optional"
 ) -> _SignerDefinition:
@@ -161,7 +147,6 @@ def build_signer_plan(
                 "Recipient Authorized Signatory",
                 "recipient_authorized_signatory",
             ),
-            _provider("provider_authorized_signatory"),
         )
     elif template_id == "biological_material_agreement":
         can_certify = information.get(
@@ -171,14 +156,12 @@ def build_signer_plan(
             decision_required = "recipient_scientist_can_certify_organization"
             definitions = (
                 _recipient_scientist(("recipient_scientist",)),
-                _provider("provider_organization_certifier"),
             )
         elif can_certify:
             definitions = (
                 _recipient_scientist(
                     ("recipient_scientist", "recipient_organization_certifier")
                 ),
-                _provider("provider_organization_certifier"),
             )
         else:
             definitions = (
@@ -187,7 +170,6 @@ def build_signer_plan(
                     "Recipient Authorized Official",
                     "recipient_organization_certifier",
                 ),
-                _provider("provider_organization_certifier"),
             )
     elif template_id == "device_material_agreement":
         definitions = (
@@ -196,7 +178,6 @@ def build_signer_plan(
                 "Recipient Authorized Official",
                 "recipient_authorized_signatory",
             ),
-            _provider("provider_authorized_signatory"),
         )
     else:
         raise ValueError(f"Unsupported signing workflow: {template_id}")

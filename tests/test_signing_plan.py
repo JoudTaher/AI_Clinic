@@ -13,15 +13,13 @@ def information(**overrides: object) -> dict[str, object]:
 
 
 @pytest.mark.parametrize("template_id", ["chemical_material_agreement", "animal_material_agreement"])
-def test_autm_plan_uses_recipient_official_then_provider(template_id: str):
+def test_autm_plan_invites_only_recipient_official(template_id: str):
     plan = build_signer_plan(template_id, information())
 
     assert [(signer.party, signer.order, signer.roles) for signer in plan.signers] == [
         ("recipient_authorized_official", 1, ("recipient_authorized_signatory",)),
-        ("provider_scientist", 2, ("provider_authorized_signatory",)),
     ]
     assert plan.signers[0].email == "recipient.official@example.org"
-    assert plan.signers[1].email == "provider.scientist@umich.edu"
 
 
 def test_ubmta_plan_combines_recipient_roles_when_scientist_can_certify():
@@ -36,7 +34,6 @@ def test_ubmta_plan_combines_recipient_roles_when_scientist_can_certify():
             1,
             ("recipient_scientist", "recipient_organization_certifier"),
         ),
-        ("provider_scientist", 2, ("provider_organization_certifier",)),
     ]
 
 
@@ -53,7 +50,6 @@ def test_ubmta_plan_requires_official_when_scientist_cannot_certify():
             1,
             ("recipient_organization_certifier",),
         ),
-        ("provider_scientist", 2, ("provider_organization_certifier",)),
     ]
 
 
@@ -67,7 +63,6 @@ def test_simple_letter_plan_matches_visible_signature_roles():
             1,
             ("recipient_authorized_signatory",),
         ),
-        ("provider_scientist", 2, ("provider_authorized_signatory",)),
     ]
     assert plan.signers[0].title == ""
 
@@ -78,14 +73,10 @@ def test_strict_plan_reports_all_missing_fields_before_delivery():
             "chemical_material_agreement",
             information(
                 recipient_authorized_official_email="",
-                provider_scientist_name="",
             ),
         )
 
-    assert caught.value.missing_fields == (
-        "recipient_authorized_official_email",
-        "provider_scientist_name",
-    )
+    assert caught.value.missing_fields == ("recipient_authorized_official_email",)
 
 
 def test_preview_plan_keeps_roles_visible_with_incomplete_identity_data():
@@ -105,7 +96,6 @@ def test_preview_plan_keeps_roles_visible_with_incomplete_identity_data():
     )
     assert [signer.party for signer in plan.signers] == [
         "recipient_scientist",
-        "provider_scientist",
     ]
 
 
@@ -113,6 +103,4 @@ def test_signer_source_metadata_is_canonical():
     plan = build_signer_plan("device_material_agreement", information())
 
     assert plan.signers[0].source_summary == "from Outgoing Material Details"
-    assert plan.signers[-1].source_summary == (
-        "name from Contact PI; signing email from Agreement and Signing Information"
-    )
+    assert plan.signers[-1].source_summary == "from Agreement and Signing Information"

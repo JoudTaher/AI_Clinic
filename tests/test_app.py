@@ -48,7 +48,9 @@ def test_app_loads_erpm_aligned_intake_sections():
     assert (
         "Has the Simple Letter Agreement been authorized for this request?" not in labels
     )
-    assert any(button.label == "Process request" for button in app.button)
+    assert any(
+        button.label == "Prepare final agreement review" for button in app.button
+    )
 
 
 def test_material_types_match_the_erpm_form():
@@ -139,7 +141,11 @@ def test_empty_submission_fails_closed_without_crashing():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
 
-    next(button for button in app.button if button.label == "Process request").click()
+    next(
+        button
+        for button in app.button
+        if button.label == "Prepare final agreement review"
+    ).click()
     app.run(timeout=10)
 
     assert not app.exception
@@ -157,7 +163,11 @@ def test_invalid_email_error_is_shown_next_to_the_email_field():
         if item.label == "Recipient Scientist Email *"
     ).set_value("not an email")
 
-    next(button for button in app.button if button.label == "Process request").click()
+    next(
+        button
+        for button in app.button
+        if button.label == "Prepare final agreement review"
+    ).click()
     app.run(timeout=10)
 
     assert not app.exception
@@ -190,6 +200,51 @@ def test_ubmta_shows_only_ubmta_template_entries():
     )
 
 
+def test_populated_agreement_requires_review_confirmation_before_delivery():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app = AppTest.from_file(str(app_path)).run(timeout=10)
+    next(button for button in app.button if button.label == "Load sample data").click()
+    app.run(timeout=10)
+    next(
+        item
+        for item in app.selectbox
+        if item.label == "Is the structure of this compound confidential? *"
+    ).select("No")
+    app.run(timeout=10)
+
+    next(
+        button
+        for button in app.button
+        if button.label == "Prepare final agreement review"
+    ).click()
+    app.run(timeout=60)
+
+    assert not app.exception
+    assert "Final review and confirmation" in [item.value for item in app.subheader]
+    assert any(
+        button.label == "Download populated agreement to review"
+        for button in app.download_button
+    )
+    confirmation = next(
+        item
+        for item in app.checkbox
+        if item.label.startswith("I confirm that I reviewed this populated agreement")
+    )
+    assert confirmation.value is False
+    delivery = next(
+        button
+        for button in app.button
+        if button.label in {
+            "Send confirmed agreement through SignNow",
+            "Create confirmed local signing package",
+        }
+    )
+    assert delivery.disabled is True
+    table_text = " ".join(str(item.value) for item in app.table)
+    assert "The Regents of the University of Michigan" in table_text
+    assert "Synthetic research compound C-101" in table_text
+
+
 def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
@@ -210,6 +265,7 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
     labels = {element.label for element in app.text_input}
     assert "Provider Scientist academic/job title (if known)" in labels
     assert "Recipient Scientist academic/job title (if known)" in labels
+    assert "Provider Scientist signing email *" not in labels
     assert "Provider Scientist title" not in labels
     assert "Recipient Scientist title" not in labels
     assert sum(item.label == "Contact PI *" for item in app.text_input) == 1
@@ -219,7 +275,7 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
                    for item in app.get("html"))
 
 
-def test_ubmta_shows_exact_signnow_invitation_sources():
+def test_ubmta_shows_only_recipient_side_signnow_invitation():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     next(item for item in app.text_input if item.label == "Contact PI *").set_value(
@@ -236,11 +292,6 @@ def test_ubmta_shows_exact_signnow_invitation_sources():
     ).select("Plasmid/Vector (rDNA or SNA)")
     app.run(timeout=10)
 
-    next(
-        item
-        for item in app.text_input
-        if item.label == "Provider Scientist signing email *"
-    ).set_value("provider@umich.edu")
     next(
         item
         for item in app.selectbox
@@ -275,15 +326,17 @@ def test_ubmta_shows_exact_signnow_invitation_sources():
     assert not app.exception
     previews = [str(item.proto) for item in app.get("html")]
     recipient = next(item for item in previews if 'Signing order 1' in item)
-    provider = next(item for item in previews if 'Signing order 2' in item)
-    assert "From Personnel" in [item.value for item in app.caption]
     assert "From Outgoing Material Details" in [item.value for item in app.caption]
     assert all(value in recipient for value in (
         "Recipient Scientist", "Dr. Recipient", "recipient@example.org",
     ))
-    assert all(value in provider for value in (
-        "Provider Scientist", "Dr. Provider", "provider@umich.edu",
-    ))
+    assert not any("Signing order 2" in item for item in previews)
+    assert any(
+        "Maggie Swift" in item.value
+        and "SignNow sends invitations only to required recipient-side signer(s)"
+        in item.value
+        for item in app.info
+    )
 
 
 def test_autm_shows_autm_shipping_and_signatory_entries():

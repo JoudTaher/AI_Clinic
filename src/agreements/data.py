@@ -13,6 +13,8 @@ class AgreementDataError(AgreementRenderError):
 
 PROVIDER_ORGANIZATION = "The Regents of the University of Michigan"
 PROVIDER_ADDRESS = "1600 Huron Parkway, 2nd Floor\nAnn Arbor, Michigan 48109-2590"
+PROVIDER_AUTHORIZED_SIGNATORY_NAME = "Maggie Swift"
+PROVIDER_AUTHORIZED_SIGNATORY_TITLE = "Technology Transfer Associate Director"
 
 
 @dataclass(frozen=True)

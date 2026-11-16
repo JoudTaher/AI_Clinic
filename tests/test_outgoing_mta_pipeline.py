@@ -1,5 +1,7 @@
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from src.agreement_review import AgreementConfirmation
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
 from src.pipeline.ports import AgreementRenderError, DeliveryError
@@ -9,12 +11,19 @@ from tests.fixtures import request_for, verified_facts_for
 class RecordingRenderer:
     def __init__(self) -> None:
         self.calls = 0
+        self._temporary_directory = TemporaryDirectory()
 
     def render(self, submission_id, template, request):
         self.calls += 1
+        path = Path(self._temporary_directory.name) / (
+            f"{submission_id}-{template.template_id}.docx"
+        )
+        path.write_bytes(
+            f"{submission_id}:{template.template_id}:{self.calls}".encode("utf-8")
+        )
         return RenderedAgreement(
             template_id=template.template_id,
-            path=Path(f"/tmp/{submission_id}-{template.template_id}.docx"),
+            path=path,
         )
 
 
@@ -63,6 +72,22 @@ def pipeline_with_recorders():
     )
 
 
+def confirm_review(pipeline, request):
+    review = pipeline.run(request)
+    assert review.status == "review_required"
+    assert review.review_reference
+    assert review.selected_template
+    assert review.artifact_path
+    return pipeline.run(
+        request,
+        AgreementConfirmation(
+            reference=review.review_reference,
+            template_id=review.selected_template,
+            artifact_path=Path(review.artifact_path),
+        ),
+    )
+
+
 def test_mixed_material_request_requires_manual_review_before_rendering():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("biological", "chemical")
@@ -78,14 +103,50 @@ def test_standard_request_is_auto_approved_and_prepared():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("chemical")
 
-    result = pipeline.run(request)
+    review = pipeline.run(request)
+
+    assert review.status == "review_required"
+    assert review.selected_template == "chemical_material_agreement"
+    assert review.submission_id.startswith("mta-")
+    assert review.review_reference
+    assert renderer.calls == 1
+    assert sender.calls == 0
+
+    result = pipeline.run(
+        request,
+        AgreementConfirmation(
+            reference=review.review_reference,
+            template_id=review.selected_template,
+            artifact_path=Path(review.artifact_path),
+        ),
+    )
 
     assert result.status == "prepared_for_signature"
-    assert result.selected_template == "chemical_material_agreement"
-    assert result.submission_id.startswith("mta-")
     assert "auto_approved:standard_rules" in result.audit_events
     assert renderer.calls == 1
     assert sender.calls == 1
+
+
+def test_changed_request_cannot_use_an_old_review_confirmation():
+    pipeline, renderer, sender = pipeline_with_recorders()
+    request = request_for("chemical")
+    review = pipeline.run(request)
+    changed = request_for("chemical")
+    changed["agreement_information"]["material_description"] = "Changed material"
+
+    result = pipeline.run(
+        changed,
+        AgreementConfirmation(
+            reference=review.review_reference,
+            template_id=review.selected_template,
+            artifact_path=Path(review.artifact_path),
+        ),
+    )
+
+    assert result.status == "review_required"
+    assert result.review_reference != review.review_reference
+    assert renderer.calls == 2
+    assert sender.calls == 0
 
 
 def test_missing_agreement_information_stops_after_template_selection():
@@ -163,7 +224,7 @@ def test_auto_selected_request_is_rendered_and_prepared_for_signature():
     pipeline, renderer, sender = pipeline_with_recorders()
     request = request_for("chemical")
 
-    result = pipeline.run(request)
+    result = confirm_review(pipeline, request)
 
     assert result.status == "prepared_for_signature"
     assert result.delivery_mode == "signnow_package"
@@ -183,7 +244,7 @@ def test_identical_questionnaire_is_idempotent():
 
     assert second == first
     assert renderer.calls == 1
-    assert sender.calls == 1
+    assert sender.calls == 0
 
 
 def test_changed_questionnaire_gets_a_different_submission_id():
@@ -195,10 +256,10 @@ def test_changed_questionnaire_gets_a_different_submission_id():
 
     result = pipeline.run(changed)
 
-    assert result.status == "prepared_for_signature"
+    assert result.status == "review_required"
     assert result.submission_id != first.submission_id
     assert renderer.calls == 2
-    assert sender.calls == 2
+    assert sender.calls == 0
 
 
 def test_malformed_questionnaire_material_types_fail_closed_without_crashing():
@@ -221,7 +282,7 @@ def test_questionnaire_material_type_overrides_contradictory_derived_category():
 
     result = pipeline.run(request)
 
-    assert result.status == "prepared_for_signature"
+    assert result.status == "review_required"
     assert result.selected_template == "chemical_material_agreement"
 
 
@@ -257,7 +318,7 @@ def test_transmittal_fee_is_derived_from_questionnaire_reimbursement_value():
     request["erpm_intake"]["reimbursement_cost_or_fee"] = "$100.00"
     request["agreement_information"]["transmittal_fee"] = "$999.00"
 
-    result = pipeline.run(request)
+    result = confirm_review(pipeline, request)
 
     assert result.status == "prepared_for_signature"
     assert (
@@ -272,7 +333,7 @@ def test_provider_signer_name_is_derived_from_contact_pi():
     request["erpm_intake"]["contact_pi_name"] = "Relevant PI"
     request["agreement_information"]["provider_scientist_name"] = "Different Person"
 
-    result = pipeline.run(request)
+    result = confirm_review(pipeline, request)
 
     assert result.status == "prepared_for_signature"
     assert sender.last_request["agreement_information"]["provider_scientist_name"] == (
@@ -293,7 +354,7 @@ def test_semantically_identical_questionnaires_share_submission_id():
 
     assert second.submission_id == first.submission_id
     assert renderer.calls == 1
-    assert sender.calls == 1
+    assert sender.calls == 0
 
 
 def test_delivery_adapter_failure_is_reported_without_marking_complete():
@@ -305,7 +366,16 @@ def test_delivery_adapter_failure_is_reported_without_marking_complete():
         verified_facts=verified_facts_for("chemical"),
     )
 
-    result = pipeline.run(request_for("chemical"))
+    request = request_for("chemical")
+    review = pipeline.run(request)
+    result = pipeline.run(
+        request,
+        AgreementConfirmation(
+            reference=review.review_reference,
+            template_id=review.selected_template,
+            artifact_path=Path(review.artifact_path),
+        ),
+    )
 
     assert result.status == "delivery_failed"
     assert result.reasons == ("delivery provider unavailable",)

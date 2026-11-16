@@ -26,6 +26,7 @@ class PipelineResult:
     artifact_path: str | None = None
     delivery_reference: str | None = None
     delivery_mode: str | None = None
+    review_reference: str | None = None
     reasons: tuple[str, ...] = ()
     audit_events: tuple[str, ...] = ()
 
@@ -38,6 +39,7 @@ class PipelineResult:
             "artifact_path": self.artifact_path,
             "delivery_reference": self.delivery_reference,
             "delivery_mode": self.delivery_mode,
+            "review_reference": self.review_reference,
             "reasons": list(self.reasons),
             "audit_events": list(self.audit_events),
         }

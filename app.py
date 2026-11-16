@@ -10,6 +10,7 @@ import streamlit as st
 
 from src.intake import evaluate_intake_readiness
 from src.agreement_readiness import evaluate_agreement_readiness
+from src.agreement_review import AgreementConfirmation, build_agreement_review
 from src.adapters.docx_renderer import DocxAgreementRenderer
 from src.materials import (
     HUMAN_MATERIAL_TYPE,
@@ -17,6 +18,7 @@ from src.materials import (
     derive_material_categories,
 )
 from src.pipeline.outgoing_mta import OutgoingMTAPipeline
+from src.pipeline.models import RenderedAgreement
 from src.screening_report import build_screening_report, serialize_screening_report
 from src.signing import build_agreement_sender
 from src.signing.plan import build_signer_plan
@@ -370,7 +372,6 @@ PREVIEW_VALUES = {
     "contact_pi_name": "Dr. Alex Morgan",
     "recipient_scientist_name": "Dr. Taylor Chen",
     "recipient_scientist_email": "taylor.chen@example.org",
-    "provider_scientist_email": "alex.morgan@example.org",
     "recipient_authorized_official_name": "Jordan Lee",
     "recipient_authorized_official_title": "Research Agreements Director",
     "recipient_authorized_official_email": "jordan.lee@example.org",
@@ -438,7 +439,6 @@ MISSING_FIELD_MESSAGES = {
         "Enter the Innovation Partnerships File Number."
     ),
     "recipient_institution_address": "Enter the Recipient Organization address.",
-    "provider_scientist_email": "Enter the Provider Scientist's signing email.",
     "material_description": "Describe the material for the agreement.",
     "shipping_recipient_name": "Enter the shipping recipient's name.",
     "shipping_address": "Enter the shipping address.",
@@ -580,7 +580,7 @@ def load_sample_data(incomplete: bool = False) -> None:
     st.session_state["sample_data_loaded"] = True
     st.session_state["show_sample_validation"] = incomplete
     if incomplete:
-        for field_id in ("project_title", "provider_scientist_email", "recipient_institution_address"):
+        for field_id in ("project_title", "recipient_institution_address"):
             st.session_state[field_id] = ""
 
 
@@ -802,7 +802,6 @@ with fields_column:
     )
 
     provider_scientist_title = ""
-    provider_scientist_email = ""
     recipient_scientist_title = ""
     recipient_institution_address = ""
     material_description = ""
@@ -819,11 +818,6 @@ with fields_column:
         with personnel_agreement_fields:
             provider_scientist_title = st.text_input(
                 "Provider Scientist academic/job title (if known)"
-            )
-            provider_scientist_email = required_text_input(
-                "Provider Scientist signing email",
-                "provider_scientist_email",
-                help="Used to deliver the signing request; it is not printed in the agreement.",
             )
             if selected_template_id != "device_material_agreement":
                 recipient_scientist_title = st.text_input(
@@ -871,7 +865,6 @@ with fields_column:
         preview_information: dict[str, object] = {
             "provider_scientist_name": contact_pi_name,
             "provider_scientist_title": provider_scientist_title,
-            "provider_scientist_email": provider_scientist_email,
             "recipient_scientist_name": recipient_scientist_name,
             "recipient_scientist_title": recipient_scientist_title,
             "recipient_scientist_email": recipient_scientist_email,
@@ -917,6 +910,12 @@ with fields_column:
             )
 
     st.subheader("Agreement and Signing Information")
+    if selected_template_id is not None:
+        st.info(
+            "U-M provider signature is prefilled: Maggie Swift, Technology Transfer "
+            "Associate Director. The agreement-generation date is added automatically. "
+            "SignNow sends invitations only to required recipient-side signer(s)."
+        )
     erpm_intake = {
         "project_title": project_title,
         "paying_for_material_as_product_or_service": paying_for_material,
@@ -968,7 +967,6 @@ with fields_column:
             {
                 "recipient_institution_address": recipient_institution_address,
                 "provider_scientist_title": provider_scientist_title,
-                "provider_scientist_email": provider_scientist_email,
                 "material_description": material_description,
                 "recipient_pays_shipping": recipient_pays_shipping,
                 "material_provided_at_no_cost": material_provided_at_no_cost,
@@ -1012,7 +1010,8 @@ with fields_column:
         with st.container(key="signing_preview"):
             st.markdown("#### Signing Preview")
             st.caption(
-                "Review who will sign and in what order. Signing email addresses are not printed in the agreement."
+                "Review the recipient-side SignNow invitations. Maggie Swift's provider "
+                "signature is already in the agreement, so U-M receives no SignNow invitation."
             )
             if preview_plan.decision_required:
                 st.caption(
@@ -1033,8 +1032,9 @@ with fields_column:
                             '</section>'
                         )
                         st.caption(
-                            "From Personnel" if signer.party == "provider_scientist"
-                            else "From Outgoing Material Details"
+                            "From Outgoing Material Details"
+                            if signer.party == "recipient_scientist"
+                            else "From Agreement and Signing Information"
                         )
     else:
         with st.container(key="agreement_empty_state"):
@@ -1054,7 +1054,7 @@ with fields_column:
                 "Local preview: creates an agreement and signing package. No emails will be sent."
             )
 
-        submitted = st.button("Process request", type="primary")
+        submitted = st.button("Prepare final agreement review", type="primary")
 
     if submitted or st.session_state.get("show_sample_validation", False):
         issue_ids = set()
@@ -1096,8 +1096,38 @@ with fields_column:
             displayed_fields,
         )
 
+    review_result_key = "_prepared_agreement_pipeline_result"
+    review_model_key = "_prepared_agreement_review"
+    screening_report_key = "_prepared_screening_report"
+
     if submitted:
         report = build_screening_report(request)
+        pipeline = OutgoingMTAPipeline(
+            renderer=DocxAgreementRenderer(project_root / "outputs" / "agreements"),
+            sender=agreement_sender,
+        )
+        pipeline_result = pipeline.run(request)
+        st.session_state[screening_report_key] = report
+        st.session_state[review_result_key] = pipeline_result
+        if (
+            pipeline_result.status == "review_required"
+            and pipeline_result.selected_template
+            and pipeline_result.artifact_path
+        ):
+            st.session_state[review_model_key] = build_agreement_review(
+                request,
+                pipeline_result.selected_template,
+                RenderedAgreement(
+                    template_id=pipeline_result.selected_template,
+                    path=Path(pipeline_result.artifact_path),
+                ),
+            )
+        else:
+            st.session_state.pop(review_model_key, None)
+
+    report = st.session_state.get(screening_report_key)
+    pipeline_result = st.session_state.get(review_result_key)
+    if isinstance(report, Mapping) and pipeline_result is not None:
         intake_readiness = report["intake_readiness"]
         eligibility = report["eligibility"]
         agreement_readiness = report["agreement_readiness"]
@@ -1165,14 +1195,111 @@ with fields_column:
             for reason in template_result["review_reasons"]:
                 st.caption(reason)
 
-        pipeline = OutgoingMTAPipeline(
-            renderer=DocxAgreementRenderer(project_root / "outputs" / "agreements"),
-            sender=agreement_sender,
-        )
-        pipeline_result = pipeline.run(request)
+        if pipeline_result.status == "review_required":
+            st.markdown("**Automation result**")
+            st.info(
+                "The populated agreement is ready for final review. "
+                "No SignNow API request or local signing delivery has occurred."
+            )
+            prepared_review = st.session_state.get(review_model_key)
+            agreement_path = Path(pipeline_result.artifact_path or "")
+            review_is_current = False
+            if prepared_review is not None and agreement_path.is_file():
+                try:
+                    current_review = build_agreement_review(
+                        request,
+                        pipeline_result.selected_template,
+                        RenderedAgreement(
+                            template_id=pipeline_result.selected_template,
+                            path=agreement_path,
+                        ),
+                    )
+                    review_is_current = (
+                        current_review.reference == prepared_review.reference
+                        == pipeline_result.review_reference
+                    )
+                except ValueError:
+                    review_is_current = False
 
-        st.markdown("**Automation result**")
+            st.subheader("Final review and confirmation")
+            if not review_is_current:
+                st.warning(
+                    "The form changed after this agreement was generated. Prepare a new "
+                    "final agreement review before confirming or sending it."
+                )
+            else:
+                review_rows = [
+                    {
+                        "Section": field.section,
+                        "Field": field.label,
+                        "Value": field.value,
+                    }
+                    for field in prepared_review.fields
+                ]
+                review_rows.extend(
+                    {
+                        "Section": "Signing delivery",
+                        "Field": f"Signing order {signer.order}: {signer.label}",
+                        "Value": f"{signer.name} <{signer.email}>",
+                    }
+                    for signer in prepared_review.signers
+                )
+                st.table(review_rows)
+                if prepared_review.warnings:
+                    st.markdown("**Items to double-check**")
+                    for warning in prepared_review.warnings:
+                        st.warning(warning.message)
+                else:
+                    st.success("No additional spelling, address, or identity warnings were found.")
+
+                st.download_button(
+                    "Download populated agreement to review",
+                    data=agreement_path.read_bytes(),
+                    file_name=agreement_path.name,
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "wordprocessingml.document"
+                    ),
+                )
+                st.caption(
+                    "If anything is wrong, correct the original field above and prepare "
+                    "a new final agreement review. The application never changes names, "
+                    "addresses, scientific terms, or agreement text automatically."
+                )
+                confirmed = st.checkbox(
+                    "I confirm that I reviewed this populated agreement and the signer "
+                    "details, and that they are correct.",
+                    key=f"agreement_confirmation_{prepared_review.reference}",
+                )
+                delivery_label = (
+                    "Send confirmed agreement through SignNow"
+                    if signing_mode == "signnow_development"
+                    else "Create confirmed local signing package"
+                )
+                deliver = st.button(
+                    delivery_label,
+                    type="primary",
+                    disabled=not confirmed,
+                )
+                if deliver:
+                    pipeline = OutgoingMTAPipeline(
+                        renderer=DocxAgreementRenderer(
+                            project_root / "outputs" / "agreements"
+                        ),
+                        sender=agreement_sender,
+                    )
+                    pipeline_result = pipeline.run(
+                        request,
+                        AgreementConfirmation(
+                            reference=prepared_review.reference,
+                            template_id=prepared_review.template_id,
+                            artifact_path=agreement_path,
+                        ),
+                    )
+                    st.session_state[review_result_key] = pipeline_result
+
         if pipeline_result.status in {"prepared_for_signature", "sent_for_signature"}:
+            st.markdown("**Automation result**")
             if pipeline_result.status == "sent_for_signature":
                 st.success("Agreement sent through SignNow Development Mode.")
                 st.caption(
@@ -1193,7 +1320,10 @@ with fields_column:
                         "wordprocessingml.document"
                     ),
                 )
-            if pipeline_result.delivery_mode == "signnow_package" and manifest_path.is_file():
+            if (
+                pipeline_result.delivery_mode == "signnow_package"
+                and manifest_path.is_file()
+            ):
                 st.download_button(
                     "Download signing manifest",
                     data=manifest_path.read_text(encoding="utf-8"),
@@ -1201,12 +1331,12 @@ with fields_column:
                     mime="application/json",
                 )
         elif pipeline_result.status == "intake_incomplete":
-            st.warning("Complete the requester questionnaire and process it again.")
+            st.warning("Complete the requester questionnaire and prepare it again.")
         elif pipeline_result.status == "agreement_incomplete":
-            st.warning("Complete the agreement and signing information and process it again.")
+            st.warning("Complete the agreement and signing information and prepare it again.")
         elif pipeline_result.status == "manual_special_case_review":
             st.warning("This request requires manual special-case MTA review in eRPM.")
-        else:
+        elif pipeline_result.status not in {"review_required"}:
             st.error("Automatic processing stopped: " + "; ".join(pipeline_result.reasons))
 
         st.download_button(
