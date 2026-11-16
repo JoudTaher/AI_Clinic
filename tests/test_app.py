@@ -52,6 +52,24 @@ def test_app_loads_erpm_aligned_intake_sections():
         button.label == "Prepare final agreement review" for button in app.button
     )
 
+    provider_signer_name = next(
+        item
+        for item in app.text_input
+        if item.label == "Provider Authorized Signer full name"
+    )
+    provider_signer_title = next(
+        item
+        for item in app.text_input
+        if item.label == "Provider Authorized Signer title"
+    )
+    assert provider_signer_name.value == "Maggie Swift"
+    assert provider_signer_name.disabled is True
+    assert provider_signer_title.value == "Technology Transfer Associate Director"
+    assert provider_signer_title.disabled is True
+    assert not any(
+        "agreement-generation date" in item.value.casefold() for item in app.info
+    )
+
 
 def test_material_types_match_the_erpm_form():
     app_path = Path(__file__).parents[1] / "app.py"
@@ -331,12 +349,6 @@ def test_ubmta_shows_only_recipient_side_signnow_invitation():
         "Recipient Scientist", "Dr. Recipient", "recipient@example.org",
     ))
     assert not any("Signing order 2" in item for item in previews)
-    assert any(
-        "Maggie Swift" in item.value
-        and "SignNow sends invitations only to required recipient-side signer(s)"
-        in item.value
-        for item in app.info
-    )
 
 
 def test_autm_shows_autm_shipping_and_signatory_entries():

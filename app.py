@@ -12,6 +12,10 @@ from src.intake import evaluate_intake_readiness
 from src.agreement_readiness import evaluate_agreement_readiness
 from src.agreement_review import AgreementConfirmation, build_agreement_review
 from src.adapters.docx_renderer import DocxAgreementRenderer
+from src.agreements.data import (
+    PROVIDER_AUTHORIZED_SIGNATORY_NAME,
+    PROVIDER_AUTHORIZED_SIGNATORY_TITLE,
+)
 from src.materials import (
     HUMAN_MATERIAL_TYPE,
     MATERIAL_TYPES,
@@ -910,12 +914,17 @@ with fields_column:
             )
 
     st.subheader("Agreement and Signing Information")
-    if selected_template_id is not None:
-        st.info(
-            "U-M provider signature is prefilled: Maggie Swift, Technology Transfer "
-            "Associate Director. The agreement-generation date is added automatically. "
-            "SignNow sends invitations only to required recipient-side signer(s)."
-        )
+    provider_signer_name_column, provider_signer_title_column = st.columns(2)
+    provider_signer_name_column.text_input(
+        "Provider Authorized Signer full name",
+        value=PROVIDER_AUTHORIZED_SIGNATORY_NAME,
+        disabled=True,
+    )
+    provider_signer_title_column.text_input(
+        "Provider Authorized Signer title",
+        value=PROVIDER_AUTHORIZED_SIGNATORY_TITLE,
+        disabled=True,
+    )
     erpm_intake = {
         "project_title": project_title,
         "paying_for_material_as_product_or_service": paying_for_material,
