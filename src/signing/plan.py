@@ -109,7 +109,7 @@ def _build_signer(
 
 
 def _recipient_scientist(
-    roles: tuple[str, ...], *, title_mode: TitleMode = "optional"
+    roles: tuple[str, ...], *, title_mode: TitleMode = "required"
 ) -> _SignerDefinition:
     return _SignerDefinition(
         party="recipient_scientist",
@@ -156,7 +156,7 @@ def build_signer_plan(
         )
     elif template_id == "device_material_agreement":
         definitions = (
-            _recipient_scientist(("recipient_scientist",), title_mode="omit"),
+            _recipient_scientist(("recipient_scientist",)),
             _recipient_official(
                 "Recipient Authorized Official",
                 "recipient_authorized_signatory",

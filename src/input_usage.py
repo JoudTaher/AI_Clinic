@@ -148,6 +148,7 @@ AGREEMENT_COMMON_FIELDS = {
     "recipient_institution_name",
     "recipient_institution_address",
     "recipient_scientist_name",
+    "recipient_scientist_title",
     "recipient_scientist_email",
     "provider_scientist_name",
     "provider_scientist_title",
@@ -161,7 +162,6 @@ AGREEMENT_COMMON_FIELDS = {
 
 AGREEMENT_CATEGORY_FIELDS = {
     "chemical": {
-        "recipient_scientist_title",
         "recipient_authorized_official_name",
         "recipient_authorized_official_title",
         "recipient_authorized_official_email",
@@ -169,7 +169,6 @@ AGREEMENT_CATEGORY_FIELDS = {
         "shipping_address",
     },
     "animal_derived": {
-        "recipient_scientist_title",
         "recipient_authorized_official_name",
         "recipient_authorized_official_title",
         "recipient_authorized_official_email",
@@ -177,7 +176,6 @@ AGREEMENT_CATEGORY_FIELDS = {
         "shipping_address",
     },
     "biological": {
-        "recipient_scientist_title",
         "recipient_authorized_official_name",
         "recipient_authorized_official_title",
         "recipient_authorized_official_email",

@@ -151,7 +151,6 @@ def request_for(*categories: str) -> dict:
         agreement.pop("shipping_recipient_name")
         agreement.pop("shipping_address")
     elif categories == ("device",):
-        agreement.pop("recipient_scientist_title")
         agreement.pop("shipping_recipient_name")
         agreement.pop("shipping_address")
     return {

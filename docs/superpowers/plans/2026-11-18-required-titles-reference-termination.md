@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Provider Scientist academic/job title is required for every automatically generated agreement.
-- Recipient Scientist academic/job title is required only when the selected template contains that field.
+- Recipient Scientist academic/job title is required for every supported agreement. The Simple Letter Agreement prints it beneath the scientist's name in the existing information cell.
 - Recipient Authorized Official title remains required.
 - The final review is unavailable until every applicable required title is present.
 - The readable reference format is `MTA-YYYY-XXXXXXXX`; the full SHA submission ID remains internal.
@@ -23,7 +23,7 @@
 
 ## Review Focus
 
-- Device agreements must require the provider title but must not require the unprinted recipient-scientist title.
+- Device agreements must require both scientist titles and print the recipient title beneath the Recipient Scientist's name.
 - A request must keep the same reference through preview and confirmed delivery.
 - SignNow upload names must be searchable but filesystem-safe generated filenames must remain portable.
 - A zero or missing duration must continue to block readiness before termination population.

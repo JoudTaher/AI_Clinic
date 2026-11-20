@@ -318,7 +318,7 @@ def test_autm_shows_autm_shipping_and_signatory_entries():
     assert "Recipient Authorized Signatory name *" in labels
 
 
-def test_simple_letter_omits_autm_only_fields():
+def test_simple_letter_requires_recipient_title_but_omits_autm_shipping_fields():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     material_types = next(
@@ -334,7 +334,7 @@ def test_simple_letter_omits_autm_only_fields():
     }
     assert "Material description *" in labels
     assert "Provider Scientist academic/job title *" in labels
-    assert "Recipient Scientist academic/job title *" not in labels
+    assert "Recipient Scientist academic/job title *" in labels
     assert "Shipping recipient name" not in labels
     assert "Shipping address" not in labels
     assert "Recipient Authorized Official name *" in labels

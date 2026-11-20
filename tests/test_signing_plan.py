@@ -46,7 +46,17 @@ def test_simple_letter_plan_matches_visible_signature_roles():
             ("recipient_authorized_signatory",),
         ),
     ]
-    assert plan.signers[0].title == ""
+    assert plan.signers[0].title == "Associate Professor"
+
+
+def test_simple_letter_plan_requires_recipient_scientist_title():
+    plan = build_signer_plan(
+        "device_material_agreement",
+        information(recipient_scientist_title=""),
+        strict=False,
+    )
+
+    assert plan.missing_fields == ("recipient_scientist_title",)
 
 
 def test_strict_plan_reports_all_missing_fields_before_delivery():

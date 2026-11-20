@@ -126,7 +126,7 @@ def test_simple_letter_package_matches_visible_signature_roles(tmp_path: Path):
     assert [signer["order"] for signer in manifest["signers"]] == [1, 1]
 
 
-def test_simple_letter_ignores_stale_recipient_scientist_title(tmp_path: Path):
+def test_simple_letter_package_includes_recipient_scientist_title(tmp_path: Path):
     request = request_for("device")
     request["agreement_information"]["recipient_scientist_title"] = "Stale title"
     sender = SignNowPackageSender(tmp_path / "signing")
@@ -138,7 +138,7 @@ def test_simple_letter_ignores_stale_recipient_scientist_title(tmp_path: Path):
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
-    assert manifest["signers"][0]["title"] == ""
+    assert manifest["signers"][0]["title"] == "Stale title"
 
 
 def test_unsupported_template_does_not_write_manifest(tmp_path: Path):

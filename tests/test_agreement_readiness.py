@@ -119,16 +119,19 @@ def test_ubmta_does_not_require_autm_shipping_slots():
     assert result["status"] == "ready"
 
 
-def test_simple_letter_does_not_require_unprinted_recipient_title_or_shipping():
+def test_simple_letter_requires_recipient_title_but_not_autm_shipping():
     request = request_for("device")
     information = request["agreement_information"]
-    information.pop("recipient_scientist_title", None)
+    information["recipient_scientist_title"] = ""
     information.pop("shipping_recipient_name", None)
     information.pop("shipping_address", None)
 
     result = evaluate_agreement_readiness(request)
 
-    assert result["status"] == "ready"
+    assert result["status"] == "missing_information"
+    assert "recipient_scientist_title" in result["missing_fields"]
+    assert "shipping_recipient_name" not in result["missing_fields"]
+    assert "shipping_address" not in result["missing_fields"]
 
 
 def test_provider_scientist_title_is_required_for_every_template():
@@ -149,8 +152,8 @@ def test_provider_scientist_title_is_required_for_every_template():
         assert "provider_scientist_title" in result["missing_fields"]
 
 
-def test_recipient_scientist_title_is_required_only_when_template_prints_it():
-    for category in ("chemical", "animal_derived", "biological"):
+def test_recipient_scientist_title_is_required_for_every_template():
+    for category in ("chemical", "animal_derived", "biological", "device"):
         request = request_for(category)
         request["agreement_information"]["recipient_scientist_title"] = ""
 
@@ -165,12 +168,6 @@ def test_recipient_scientist_title_is_required_only_when_template_prints_it():
 
         assert result["status"] == "missing_information", category
         assert "recipient_scientist_title" in result["missing_fields"]
-
-    device = request_for("device")
-    device["agreement_information"]["recipient_scientist_title"] = ""
-    result = evaluate_agreement_readiness(device)
-    assert result["status"] == "ready"
-    assert "recipient_scientist_title" not in result["missing_fields"]
 
 
 def test_autm_still_requires_template_shipping_slots():

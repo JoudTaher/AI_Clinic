@@ -42,7 +42,7 @@ def main() -> None:
     replace_paragraph(
         document,
         "The system reuses questionnaire data rather than asking for the same identity twice. Contact PI becomes the provider scientist name. Recipient entity and recipient scientist fields populate the recipient party. Duration, research purpose, and reimbursement are retained as agreement context and are inserted only where the approved template exposes a supported slot. Signing emails are delivery data and are not printed in the agreement.",
-        "The system reuses questionnaire data rather than asking for the same identity twice. Contact PI becomes the provider scientist name. Recipient entity and recipient scientist fields populate the recipient party. Provider Scientist academic or job title is required for every generated agreement. Recipient Scientist title is required only when the selected template prints it, and Recipient Authorized Official title remains required. Research purpose and reimbursement are inserted only where an approved template exposes a supported slot. The AUTM chemical and animal renderers activate the existing Exhibit B termination option and express the entered project period relative to the date of the last signature. Signing emails are delivery data and are not printed in the agreement.",
+        "The system reuses questionnaire data rather than asking for the same identity twice. Contact PI becomes the provider scientist name. Recipient entity and recipient scientist fields populate the recipient party. Provider Scientist and Recipient Scientist academic or job titles are required for every generated agreement, and the Recipient Authorized Official title remains required. In the Simple Letter Agreement, the recipient title is printed beneath the scientist's name in the existing information cell. Research purpose and reimbursement are inserted only where an approved template exposes a supported slot. The AUTM chemical and animal renderers activate the existing Exhibit B termination option and express the entered project period relative to the date of the last signature. Signing emails are delivery data and are not printed in the agreement.",
     )
     replace_paragraph(
         document,
@@ -97,7 +97,7 @@ def main() -> None:
     set_cell(document, 8, 1, 1, "Contact PI; Agreement and Signing Information")
     set_cell(document, 8, 1, 2, "Required agreement population fields")
     set_cell(document, 8, 4, 0, "Recipient scientist name, email, and applicable title")
-    set_cell(document, 8, 4, 2, "Agreement population and recipient signing plan; title is required only when printed")
+    set_cell(document, 8, 4, 2, "Agreement population and recipient signing plan; scientist and authorized-official titles are required")
     set_cell(document, 8, 5, 0, "Recipient authorized official name, title, and email")
     set_cell(document, 8, 8, 2, "AUTM Exhibit B termination period measured from the date of the last signature")
 

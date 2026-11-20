@@ -598,7 +598,12 @@ class DocxAgreementRenderer:
             )
             _set_cell_text(
                 cls._cell(tables, 1, 0, 1),
-                data.recipient_scientist_name,
+                "\n".join(
+                    (
+                        data.recipient_scientist_name,
+                        data.recipient_scientist_title,
+                    )
+                ),
                 preserve_run_formatting=False,
             )
             _set_cell_text(

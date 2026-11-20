@@ -826,11 +826,10 @@ with fields_column:
                 "Provider Scientist academic/job title",
                 "provider_scientist_title",
             )
-            if selected_template_id != "device_material_agreement":
-                recipient_scientist_title = required_text_input(
-                    "Recipient Scientist academic/job title",
-                    "recipient_scientist_title",
-                )
+            recipient_scientist_title = required_text_input(
+                "Recipient Scientist academic/job title",
+                "recipient_scientist_title",
+            )
         with outgoing_agreement_fields:
             recipient_institution_address = required_text_area(
                 "Recipient Organization address", "recipient_institution_address"

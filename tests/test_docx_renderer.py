@@ -295,6 +295,7 @@ def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Pat
         ("biological", "biological_material_agreement", "provider_scientist_title"),
         ("biological", "biological_material_agreement", "recipient_scientist_title"),
         ("device", "device_material_agreement", "provider_scientist_title"),
+        ("device", "device_material_agreement", "recipient_scientist_title"),
     ],
 )
 def test_renderer_rejects_missing_applicable_scientist_title(
@@ -309,17 +310,15 @@ def test_renderer_rejects_missing_applicable_scientist_title(
         )
 
 
-def test_device_renderer_does_not_require_unprinted_recipient_scientist_title(
-    tmp_path: Path,
-):
+def test_device_renderer_populates_recipient_scientist_title(tmp_path: Path):
     request = request_for("device")
-    request["agreement_information"]["recipient_scientist_title"] = ""
 
     artifact = DocxAgreementRenderer(tmp_path).render(
         "REQ-DEVICE-TITLE", template("device_material_agreement"), request
     )
 
-    assert artifact.path.is_file()
+    text = document_text(artifact.path)
+    assert "Dr. Recipient\nAssociate Professor" in text
 
 
 def test_renderer_rejects_missing_template_specific_authorized_official(

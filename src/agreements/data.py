@@ -88,14 +88,7 @@ class AgreementData:
             recipient_organization=required("recipient_institution_name"),
             recipient_address=required("recipient_institution_address"),
             recipient_scientist_name=required("recipient_scientist_name"),
-            recipient_scientist_title=required_for(
-                "recipient_scientist_title",
-                {
-                    "chemical_material_agreement",
-                    "animal_material_agreement",
-                    "biological_material_agreement",
-                },
-            ),
+            recipient_scientist_title=required("recipient_scientist_title"),
             recipient_authorized_official_name=recipient_official_name,
             recipient_authorized_official_title=recipient_official_title,
             material_description=required("material_description"),
