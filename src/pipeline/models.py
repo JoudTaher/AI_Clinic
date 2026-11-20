@@ -20,6 +20,7 @@ class DeliveryReceipt:
 @dataclass(frozen=True)
 class PipelineResult:
     submission_id: str
+    tracking_reference: str
     status: str
     selected_template: str | None = None
     recommended_template: str | None = None
@@ -33,6 +34,7 @@ class PipelineResult:
     def as_dict(self) -> dict[str, object]:
         return {
             "submission_id": self.submission_id,
+            "tracking_reference": self.tracking_reference,
             "status": self.status,
             "selected_template": self.selected_template,
             "recommended_template": self.recommended_template,

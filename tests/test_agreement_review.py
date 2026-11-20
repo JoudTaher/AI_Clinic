@@ -26,6 +26,7 @@ def test_review_uses_renderer_data_and_signnow_signer_data(tmp_path):
     assert values["provider_scientist_name"] == "Dr. Provider"
     assert values["recipient_organization"] == "Example U.S. Non-Profit University"
     assert values["material_description"] == "Synthetic research compound C-101"
+    assert values["requested_duration"] == "3 years"
     assert values["shipping_address"] == "100 Research Way, Example, MI 48100"
     assert [signer.email for signer in review.signers] == [
         "recipient.official@example.org",

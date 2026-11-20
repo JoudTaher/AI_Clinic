@@ -7,7 +7,7 @@ def test_app_loads_erpm_aligned_intake_sections():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     assert not app.exception
-    assert app.title[0].value == "Outgoing Material Transfer Agreement"
+    assert app.title[0].value == "Outgoing MTA request"
     headings = [item.value for item in app.subheader]
     assert headings[:5] == [
         "Project Details",
@@ -49,7 +49,7 @@ def test_app_loads_erpm_aligned_intake_sections():
         "Has the Simple Letter Agreement been authorized for this request?" not in labels
     )
     assert any(
-        button.label == "Prepare final agreement review" for button in app.button
+        button.label == "Review generated agreement" for button in app.button
     )
 
     provider_signer_name = next(
@@ -152,7 +152,7 @@ def test_human_material_selection_shows_only_source_form_conditionals():
         "Protocol and informed-consent sections allowing transfer outside U-M *"
         in labels
     )
-    assert "Original Material description *" in labels
+    assert "Original Material description *" not in labels
 
 
 def test_empty_submission_fails_closed_without_crashing():
@@ -162,7 +162,7 @@ def test_empty_submission_fails_closed_without_crashing():
     next(
         button
         for button in app.button
-        if button.label == "Prepare final agreement review"
+        if button.label == "Review generated agreement"
     ).click()
     app.run(timeout=10)
 
@@ -184,7 +184,7 @@ def test_invalid_email_error_is_shown_next_to_the_email_field():
     next(
         button
         for button in app.button
-        if button.label == "Prepare final agreement review"
+        if button.label == "Review generated agreement"
     ).click()
     app.run(timeout=10)
 
@@ -195,7 +195,7 @@ def test_invalid_email_error_is_shown_next_to_the_email_field():
     )
 
 
-def test_ubmta_shows_only_ubmta_template_entries():
+def test_biological_selection_exposes_ubmta_population_and_signer_fields():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     material_types = next(
@@ -214,8 +214,11 @@ def test_ubmta_shows_only_ubmta_template_entries():
     assert "Shipping address" not in labels
     assert (
         "Recipient Scientist authorized to certify for Recipient Organization? *"
-        in labels
+        not in labels
     )
+    assert "Recipient Authorized Official name *" in labels
+    assert "Recipient Authorized Official title *" in labels
+    assert "Recipient Authorized Official signing email *" in labels
 
 
 def test_populated_agreement_requires_review_confirmation_before_delivery():
@@ -233,7 +236,7 @@ def test_populated_agreement_requires_review_confirmation_before_delivery():
     next(
         button
         for button in app.button
-        if button.label == "Prepare final agreement review"
+        if button.label == "Review generated agreement"
     ).click()
     app.run(timeout=60)
 
@@ -259,11 +262,12 @@ def test_populated_agreement_requires_review_confirmation_before_delivery():
     )
     assert delivery.disabled is True
     table_text = " ".join(str(item.value) for item in app.table)
+    assert "MTA-2026-" in table_text
     assert "The Regents of the University of Michigan" in table_text
     assert "Synthetic research compound C-101" in table_text
 
 
-def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
+def test_agreement_section_reuses_full_names_and_requires_applicable_titles():
     app_path = Path(__file__).parents[1] / "app.py"
     app = AppTest.from_file(str(app_path)).run(timeout=10)
     next(item for item in app.text_input if item.label == "Contact PI *").set_value(
@@ -277,12 +281,13 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
     ).set_value("recipient@example.org")
     next(
         item for item in app.multiselect if item.label == "Material Type *"
-    ).select("Plasmid/Vector (rDNA or SNA)")
+    ).select("Chemical compound")
     app.run(timeout=10)
 
     labels = {element.label for element in app.text_input}
-    assert "Provider Scientist academic/job title (if known)" in labels
-    assert "Recipient Scientist academic/job title (if known)" in labels
+    assert "Provider Scientist academic/job title *" in labels
+    assert "Recipient Scientist academic/job title *" in labels
+    assert not any("(if known)" in label for label in labels)
     assert "Provider Scientist signing email *" not in labels
     assert "Provider Scientist title" not in labels
     assert "Recipient Scientist title" not in labels
@@ -291,64 +296,6 @@ def test_agreement_section_reuses_full_names_and_labels_titles_as_optional():
     assert any("Please recheck the form" in item.value for item in app.info)
     assert not any("signer-summary" in str(item.proto) and "<section" in str(item.proto)
                    for item in app.get("html"))
-
-
-def test_ubmta_shows_only_recipient_side_signnow_invitation():
-    app_path = Path(__file__).parents[1] / "app.py"
-    app = AppTest.from_file(str(app_path)).run(timeout=10)
-    next(item for item in app.text_input if item.label == "Contact PI *").set_value(
-        "Dr. Provider"
-    )
-    next(
-        item for item in app.text_input if item.label == "Recipient Scientist Name *"
-    ).set_value("Dr. Recipient")
-    next(
-        item for item in app.text_input if item.label == "Recipient Scientist Email *"
-    ).set_value("recipient@example.org")
-    next(
-        item for item in app.multiselect if item.label == "Material Type *"
-    ).select("Plasmid/Vector (rDNA or SNA)")
-    app.run(timeout=10)
-
-    next(
-        item
-        for item in app.selectbox
-        if item.label
-        == "Recipient Scientist authorized to certify for Recipient Organization? *"
-    ).select("Yes")
-    app.run(timeout=10)
-
-    for item in app.text_input:
-        if item.label == "Project Title *":
-            item.set_value("Research transfer")
-        elif item.label == "Primary Research Administrator *":
-            item.set_value("Research Administrator")
-        elif item.label == "Project Administrative Home *":
-            item.set_value("Research Department")
-        elif item.label == "Recipient Entity full name *":
-            item.set_value("Example University")
-        elif item.label.startswith("What reimbursement"):
-            item.set_value("None")
-    for item in app.text_area:
-        if item.label == "Recipient Organization address *":
-            item.set_value("100 Research Way, Ann Arbor, MI 48109")
-        elif item.label == "Original Material description *":
-            item.set_value("Synthetic research plasmid")
-        elif item.label.startswith("Recipient's experimental plan"):
-            item.set_value("Internal noncommercial laboratory research")
-    app.number_input[0].set_value(1)
-    for item in app.selectbox:
-        if item.value == "Not answered":
-            item.select("Yes" if item.label.startswith(("Will the Recipient Scientist pay", "Will the Provider Scientist provide")) else "No")
-    app.run(timeout=10)
-    assert not app.exception
-    previews = [str(item.proto) for item in app.get("html")]
-    recipient = next(item for item in previews if 'Signing order 1' in item)
-    assert "From Outgoing Material Details" in [item.value for item in app.caption]
-    assert all(value in recipient for value in (
-        "Recipient Scientist", "Dr. Recipient", "recipient@example.org",
-    ))
-    assert not any("Signing order 2" in item for item in previews)
 
 
 def test_autm_shows_autm_shipping_and_signatory_entries():
@@ -386,7 +333,8 @@ def test_simple_letter_omits_autm_only_fields():
         for element in group
     }
     assert "Material description *" in labels
-    assert "Recipient Scientist academic/job title (if known)" not in labels
+    assert "Provider Scientist academic/job title *" in labels
+    assert "Recipient Scientist academic/job title *" not in labels
     assert "Shipping recipient name" not in labels
     assert "Shipping address" not in labels
     assert "Recipient Authorized Official name *" in labels
@@ -407,6 +355,6 @@ def test_mixed_selection_hides_all_template_specific_agreement_inputs():
         for group in (app.text_input, app.text_area, app.selectbox)
         for element in group
     }
-    assert "Provider Scientist academic/job title (if known)" not in labels
+    assert "Provider Scientist academic/job title *" not in labels
     assert "Material description" not in labels
     assert "Shipping address" not in labels

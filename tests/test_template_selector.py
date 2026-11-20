@@ -21,7 +21,7 @@ def test_eligible_chemical_request_selects_chemical_material_agreement():
     )
 
 
-def test_eligible_biological_request_selects_biological_material_agreement():
+def test_eligible_biological_request_selects_ubmta_biological_agreement():
     result = select_template(request_for("biological"), {"status": "eligible"})
     assert result["status"] == "template_selected"
     assert result["selected_template"] == "biological_material_agreement"

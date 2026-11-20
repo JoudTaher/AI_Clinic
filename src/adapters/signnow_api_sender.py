@@ -21,6 +21,7 @@ from src.adapters.signnow_package_sender import SignNowPackageSender
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.ports import DeliveryError
 from src.request_normalization import normalize_request
+from src.request_identity import request_tracking_reference, searchable_document_name
 
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -439,7 +440,6 @@ class SignNowApiSender:
         request: Mapping[str, Any],
         artifact: RenderedAgreement,
     ) -> DeliveryReceipt:
-        del submission_id
         self._validate_configuration()
         if not artifact.path.is_file():
             raise DeliveryError(f"Agreement artifact does not exist: {artifact.path}")
@@ -449,6 +449,12 @@ class SignNowApiSender:
             raise DeliveryError("agreement_information must be an object")
         signers = SignNowPackageSender(Path(".")).signers_for(
             artifact.template_id, information
+        )
+        tracking_reference = request_tracking_reference(normalized, submission_id)
+        raw_intake = normalized.get("erpm_intake", {})
+        intake = raw_intake if isinstance(raw_intake, Mapping) else {}
+        document_name = searchable_document_name(
+            tracking_reference, intake.get("project_title")
         )
         role_aliases: dict[str, str] = {}
         for signer in signers:
@@ -465,10 +471,8 @@ class SignNowApiSender:
                 {logical_role: primary_role for logical_role in raw_roles}
             )
 
-        descriptor, temporary_name = tempfile.mkstemp(suffix=".docx")
-        os.close(descriptor)
-        tagged_path = Path(temporary_name)
-        try:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            tagged_path = Path(temporary_directory) / f"{document_name}.docx"
             tag_definitions = self.builder.build(
                 artifact, tagged_path, role_aliases=role_aliases
             )
@@ -477,8 +481,6 @@ class SignNowApiSender:
                 tagged_path,
                 {"Tags": json.dumps(tag_definitions, separators=(",", ":"))},
             )
-        finally:
-            tagged_path.unlink(missing_ok=True)
 
         document_id = _document_id(uploaded)
         document = self.transport.request_json(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from src.agreement_readiness import evaluate_agreement_readiness
@@ -9,6 +10,7 @@ from src.eligibility import evaluate_eligibility
 from src.intake import evaluate_intake_readiness
 from src.input_usage import build_input_usage
 from src.request_normalization import normalize_request
+from src.request_identity import submission_identity
 from src.templates.selector import select_template
 
 
@@ -28,8 +30,11 @@ DELIVERY_POLICY = {
 def build_screening_report(
     request: Mapping[str, Any],
     verified_facts: Mapping[str, Any] | None = None,
+    *,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     request = normalize_request(request)
+    identity = submission_identity(request, verified_facts, now=now)
     eligibility = evaluate_eligibility(request, verified_facts)
     raw_intake = request.get("erpm_intake", {})
     erpm_intake = dict(raw_intake) if isinstance(raw_intake, Mapping) else {}
@@ -42,6 +47,7 @@ def build_screening_report(
     template_id = selected_template if isinstance(selected_template, str) else None
     return {
         "proof_of_concept": True,
+        "tracking_reference": identity.tracking_reference,
         "disclaimer": DISCLAIMER,
         "delivery_policy": dict(DELIVERY_POLICY),
         "erpm_intake": erpm_intake,

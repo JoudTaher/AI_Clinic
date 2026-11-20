@@ -13,11 +13,12 @@ from tests.fixtures import request_for
 
 
 def template(template_id: str):
-    return next(
+    definition = next(
         definition
         for definition in load_template_catalog()
         if definition.template_id == template_id
     )
+    return definition
 
 
 def document_text(path: Path) -> str:
@@ -77,6 +78,8 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
     artifact = renderer.render("REQ-100", template(template_id), request_for(category))
 
     assert artifact.path.suffix == ".docx"
+    assert artifact.path.name.startswith("MTA-")
+    assert "chemical_material_agreement" in artifact.path.name or "animal_material_agreement" in artifact.path.name
     text = document_text(artifact.path)
     for expected in (
         "The Regents of the University of Michigan",
@@ -102,6 +105,23 @@ def test_autm_renderer_populates_parties_scientists_material_and_shipping(
     assert set(
         populated_provider.xpath(".//w:rPr/w:sz/@w:val", namespaces=namespace)
     ) == {"18"}
+
+
+def test_renderer_uses_supplied_tracking_reference_in_generated_filename(
+    tmp_path: Path,
+):
+    request = request_for("chemical")
+    request["tracking_reference"] = "MTA-2026-7F3A91C2"
+
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "mta-" + "7f3a91c2" + "0" * 56,
+        template("chemical_material_agreement"),
+        request,
+    )
+
+    assert artifact.path.name == (
+        "MTA-2026-7F3A91C2-chemical_material_agreement.docx"
+    )
 
 
 @pytest.mark.parametrize(
@@ -131,6 +151,44 @@ def test_autm_renderer_populates_and_activates_transmittal_fee_term(
     assert exhibit_text.strip().startswith("☒")
     assert fee_text.strip().startswith("☒")
     assert "$125.00" in fee_text
+
+
+@pytest.mark.parametrize(
+    ("category", "template_id"),
+    [
+        ("chemical", "chemical_material_agreement"),
+        ("animal_derived", "animal_material_agreement"),
+    ],
+)
+def test_autm_renderer_activates_relative_termination_period_from_last_signature(
+    tmp_path: Path, category: str, template_id: str
+):
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "REQ-AUTM-TERM", template(template_id), request_for(category)
+    )
+
+    with ZipFile(artifact.path) as package:
+        root = etree.fromstring(package.read("word/document.xml"))
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    term = paragraph_containing(root, "This Agreement shall terminate")
+    term_text = "".join(term.xpath(".//w:t/text()", namespaces=namespace))
+
+    assert term_text.strip().startswith("☒")
+    assert (
+        "This Agreement shall terminate 3 years after the date of the last signature."
+        in term_text
+    )
+    assert "This Agreement shall terminate on" not in term_text
+
+
+def test_simple_letter_does_not_gain_an_autm_termination_clause(tmp_path: Path):
+    artifact = DocxAgreementRenderer(tmp_path).render(
+        "REQ-DEVICE-NO-TERM",
+        template("device_material_agreement"),
+        request_for("device"),
+    )
+
+    assert "after the date of the last signature" not in document_text(artifact.path)
 
 
 @pytest.mark.parametrize(
@@ -227,30 +285,39 @@ def test_ubmta_renderer_populates_request_data_and_transmittal_fee(tmp_path: Pat
     assert b'w:type="page"' in document_xml
 
 
-def test_ubmta_uses_recipient_scientist_as_certifier_when_authorized(tmp_path: Path):
-    request = request_for("biological")
-    information = request["agreement_information"]
-    information["recipient_scientist_can_certify_organization"] = True
-    information["recipient_authorized_official_name"] = ""
-    information["recipient_authorized_official_title"] = ""
-    information["recipient_authorized_official_email"] = ""
+@pytest.mark.parametrize(
+    ("category", "template_id", "missing_field"),
+    [
+        ("chemical", "chemical_material_agreement", "provider_scientist_title"),
+        ("chemical", "chemical_material_agreement", "recipient_scientist_title"),
+        ("animal_derived", "animal_material_agreement", "provider_scientist_title"),
+        ("animal_derived", "animal_material_agreement", "recipient_scientist_title"),
+        ("biological", "biological_material_agreement", "provider_scientist_title"),
+        ("biological", "biological_material_agreement", "recipient_scientist_title"),
+        ("device", "device_material_agreement", "provider_scientist_title"),
+    ],
+)
+def test_renderer_rejects_missing_applicable_scientist_title(
+    tmp_path: Path, category: str, template_id: str, missing_field: str
+):
+    request = request_for(category)
+    request["agreement_information"][missing_field] = ""
+
+    with pytest.raises(AgreementDataError, match=missing_field):
+        DocxAgreementRenderer(tmp_path).render(
+            "REQ-102", template(template_id), request
+        )
+
+
+def test_device_renderer_does_not_require_unprinted_recipient_scientist_title(
+    tmp_path: Path,
+):
+    request = request_for("device")
+    request["agreement_information"]["recipient_scientist_title"] = ""
 
     artifact = DocxAgreementRenderer(tmp_path).render(
-        "REQ-101-CERTIFIER", template("biological_material_agreement"), request
+        "REQ-DEVICE-TITLE", template("device_material_agreement"), request
     )
-
-    text = document_text(artifact.path)
-    assert "Authorized Official:\tDr. Recipient" in text
-    assert "Alex Official" not in text
-
-
-def test_renderer_allows_blank_optional_scientist_titles(tmp_path: Path):
-    request = request_for("chemical")
-    request["agreement_information"]["recipient_scientist_title"] = ""
-    request["agreement_information"]["provider_scientist_title"] = ""
-    renderer = DocxAgreementRenderer(tmp_path)
-
-    artifact = renderer.render("REQ-102", template("chemical_material_agreement"), request)
 
     assert artifact.path.is_file()
 

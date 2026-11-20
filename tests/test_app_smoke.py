@@ -13,8 +13,8 @@ from tests.fixtures import request_for
     ("category", "template_id"),
     [
         ("chemical", "chemical_material_agreement"),
-        ("biological", "biological_material_agreement"),
         ("animal_derived", "animal_material_agreement"),
+        ("biological", "biological_material_agreement"),
         ("device", "device_material_agreement"),
     ],
 )

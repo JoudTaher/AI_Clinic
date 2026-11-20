@@ -13,14 +13,20 @@ COMMON_REQUIRED_TEXT_FIELDS = (
     "recipient_institution_address",
     "recipient_scientist_name",
     "provider_scientist_name",
+    "provider_scientist_title",
     "material_description",
     "recipient_research_purpose",
     "requested_duration",
 )
 
 AUTM_REQUIRED_TEXT_FIELDS = (
+    "recipient_scientist_title",
     "shipping_recipient_name",
     "shipping_address",
+)
+
+UBMTA_REQUIRED_TEXT_FIELDS = (
+    "recipient_scientist_title",
 )
 
 def _missing_text(information: Mapping[str, Any], fields: tuple[str, ...]) -> list[str]:
@@ -74,6 +80,8 @@ def evaluate_agreement_readiness(
     missing_fields = _missing_text(information, COMMON_REQUIRED_TEXT_FIELDS)
     if template_id in {"chemical_material_agreement", "animal_material_agreement"}:
         missing_fields.extend(_missing_text(information, AUTM_REQUIRED_TEXT_FIELDS))
+    if template_id == "biological_material_agreement":
+        missing_fields.extend(_missing_text(information, UBMTA_REQUIRED_TEXT_FIELDS))
 
     signer_plan = build_signer_plan(template_id, information, strict=False)
     missing_fields.extend(signer_plan.missing_fields)

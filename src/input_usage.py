@@ -120,10 +120,6 @@ AGREEMENT_FIELD_USES: dict[str, tuple[str, ...]] = {
     "recipient_scientist_name": ("agreement_population", "signing_package"),
     "recipient_scientist_title": ("agreement_population", "signing_package"),
     "recipient_scientist_email": ("signing_package",),
-    "recipient_scientist_can_certify_organization": (
-        "agreement_population",
-        "signing_package",
-    ),
     "recipient_authorized_official_name": (
         "agreement_population",
         "signing_package",
@@ -182,7 +178,6 @@ AGREEMENT_CATEGORY_FIELDS = {
     },
     "biological": {
         "recipient_scientist_title",
-        "recipient_scientist_can_certify_organization",
         "recipient_authorized_official_name",
         "recipient_authorized_official_title",
         "recipient_authorized_official_email",

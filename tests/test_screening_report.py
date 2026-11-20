@@ -1,4 +1,6 @@
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from src.screening_report import build_screening_report, serialize_screening_report
 from tests.fixtures import human_samples_request, plasmid_request, verified_facts_for
@@ -20,6 +22,7 @@ def test_report_contains_separate_decisions():
         "agreement_readiness",
         "input_usage",
         "template_selection",
+        "tracking_reference",
     }
     assert report["erpm_intake"] == {"project_title": "Synthetic plasmid transfer"}
     assert "recipient_institution_name" in report["agreement_information"]
@@ -35,6 +38,18 @@ def test_report_contains_separate_decisions():
     assert report["template_selection"]["selected_template"] is None
 
 
+def test_report_exposes_the_same_readable_reference_algorithm_as_pipeline():
+    request = plasmid_request()
+    report = build_screening_report(
+        request,
+        verified_facts=verified_facts_for("biological"),
+        now=datetime(2026, 11, 18, tzinfo=ZoneInfo("America/Detroit")),
+    )
+
+    assert report["tracking_reference"].startswith("MTA-2026-")
+    assert len(report["tracking_reference"]) == len("MTA-2026-") + 8
+
+
 def test_human_samples_failure_is_preserved():
     report = build_screening_report(human_samples_request())
     failed = [entry["field_id"] for entry in report["eligibility"]["failed_checks"]]
@@ -48,9 +63,14 @@ def test_report_uses_the_same_trusted_backend_facts_as_the_pipeline():
     )
 
     assert report["eligibility"]["status"] == "eligible"
-    assert report["template_selection"]["selected_template"] == (
-        "biological_material_agreement"
+    assert report["template_selection"]["status"] == "template_selected"
+    assert (
+        report["template_selection"]["selected_template"]
+        == "biological_material_agreement"
     )
+    assert report["template_selection"]["candidate_templates"] == [
+        "biological_material_agreement"
+    ]
 
 
 def test_serialized_report_is_valid_deterministic_json():

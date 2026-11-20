@@ -50,7 +50,6 @@ class SignerPlan:
     signers: tuple[Signer, ...]
     missing_fields: tuple[str, ...] = ()
     invalid_fields: tuple[str, ...] = ()
-    decision_required: str | None = None
 
 
 @dataclass(frozen=True)
@@ -140,7 +139,6 @@ def build_signer_plan(
     information: Mapping[str, Any],
     strict: bool = True,
 ) -> SignerPlan:
-    decision_required: str | None = None
     if template_id in {"chemical_material_agreement", "animal_material_agreement"}:
         definitions = (
             _recipient_official(
@@ -149,28 +147,13 @@ def build_signer_plan(
             ),
         )
     elif template_id == "biological_material_agreement":
-        can_certify = information.get(
-            "recipient_scientist_can_certify_organization"
+        definitions = (
+            _recipient_scientist(("recipient_scientist",)),
+            _recipient_official(
+                "Recipient Authorized Official",
+                "recipient_organization_certifier",
+            ),
         )
-        if not isinstance(can_certify, bool):
-            decision_required = "recipient_scientist_can_certify_organization"
-            definitions = (
-                _recipient_scientist(("recipient_scientist",)),
-            )
-        elif can_certify:
-            definitions = (
-                _recipient_scientist(
-                    ("recipient_scientist", "recipient_organization_certifier")
-                ),
-            )
-        else:
-            definitions = (
-                _recipient_scientist(("recipient_scientist",)),
-                _recipient_official(
-                    "Recipient Authorized Official",
-                    "recipient_organization_certifier",
-                ),
-            )
     elif template_id == "device_material_agreement":
         definitions = (
             _recipient_scientist(("recipient_scientist",), title_mode="omit"),
@@ -185,8 +168,6 @@ def build_signer_plan(
     signers: list[Signer] = []
     missing_fields: list[str] = []
     invalid_fields: list[str] = []
-    if decision_required:
-        missing_fields.append(decision_required)
     for definition in definitions:
         signer, missing, invalid = _build_signer(definition, information)
         signers.append(signer)
@@ -198,7 +179,6 @@ def build_signer_plan(
         signers=tuple(signers),
         missing_fields=tuple(dict.fromkeys(missing_fields)),
         invalid_fields=tuple(dict.fromkeys(invalid_fields)),
-        decision_required=decision_required,
     )
     if strict and (plan.missing_fields or plan.invalid_fields):
         raise SignerPlanError(plan.missing_fields, plan.invalid_fields)

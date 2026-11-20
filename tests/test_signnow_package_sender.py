@@ -22,15 +22,17 @@ def test_autm_package_has_only_recipient_side_signer(
     sender = SignNowPackageSender(tmp_path / "signing")
     category = "chemical" if template_id == "chemical_material_agreement" else "animal_derived"
 
-    receipt = sender.send(
-        "REQ/AUTM", request_for(category), artifact(tmp_path, template_id)
-    )
+    request = request_for(category)
+    request["tracking_reference"] = "MTA-2026-7F3A91C2"
+    receipt = sender.send("REQ/AUTM", request, artifact(tmp_path, template_id))
 
     manifest_path = Path(receipt.reference)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert receipt.status == "prepared_for_signature"
     assert receipt.mode == "signnow_package"
-    assert manifest_path.name == "REQ_AUTM.signing.json"
+    assert manifest_path.name == "MTA-2026-7F3A91C2.signing.json"
+    assert manifest["tracking_reference"] == "MTA-2026-7F3A91C2"
+    assert manifest["document"]["name"].startswith("MTA-2026-7F3A91C2 — ")
     assert manifest["live_submission"] is False
     assert manifest["audit_events"] == [
         "auto_approved:standard_rules",
@@ -63,48 +65,24 @@ def test_ubmta_package_assigns_visible_signature_roles_and_order(tmp_path: Path)
     assert [signer["order"] for signer in manifest["signers"]] == [1, 1]
 
 
-def test_signing_package_allows_optional_provider_and_recipient_titles(tmp_path: Path):
+def test_ubmta_package_excludes_prefilled_provider_side_signer(tmp_path: Path):
     request = request_for("biological")
-    request["agreement_information"]["provider_scientist_title"] = ""
-    request["agreement_information"]["recipient_scientist_title"] = ""
     sender = SignNowPackageSender(tmp_path / "signing")
 
     receipt = sender.send(
-        "REQ-OPTIONAL-TITLES",
+        "REQ-RECIPIENT-SIGNERS",
         request,
         artifact(tmp_path, "biological_material_agreement"),
     )
 
     manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
-    assert manifest["signers"][0]["title"] == ""
+    assert manifest["signers"][0]["title"] == "Associate Professor"
     assert manifest["signers"][1]["title"] == "Director of Research Agreements"
     assert all(
         "provider" not in role
         for signer in manifest["signers"]
         for role in signer["roles"]
     )
-
-
-def test_ubmta_combines_recipient_roles_when_scientist_can_certify(tmp_path: Path):
-    request = request_for("biological")
-    request["agreement_information"][
-        "recipient_scientist_can_certify_organization"
-    ] = True
-    sender = SignNowPackageSender(tmp_path / "signing")
-
-    receipt = sender.send(
-        "REQ-UBMTA-ONE",
-        request,
-        artifact(tmp_path, "biological_material_agreement"),
-    )
-
-    manifest = json.loads(Path(receipt.reference).read_text(encoding="utf-8"))
-    assert manifest["signers"][0]["roles"] == [
-        "recipient_scientist",
-        "recipient_organization_certifier",
-    ]
-    assert manifest["signers"][0]["email"] == "recipient.scientist@example.org"
-    assert len(manifest["signers"]) == 1
 
 
 def test_missing_recipient_signer_data_does_not_write_manifest(tmp_path: Path):

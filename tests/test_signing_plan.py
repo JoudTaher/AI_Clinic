@@ -22,26 +22,8 @@ def test_autm_plan_invites_only_recipient_official(template_id: str):
     assert plan.signers[0].email == "recipient.official@example.org"
 
 
-def test_ubmta_plan_combines_recipient_roles_when_scientist_can_certify():
-    plan = build_signer_plan(
-        "biological_material_agreement",
-        information(recipient_scientist_can_certify_organization=True),
-    )
-
-    assert [(signer.party, signer.order, signer.roles) for signer in plan.signers] == [
-        (
-            "recipient_scientist",
-            1,
-            ("recipient_scientist", "recipient_organization_certifier"),
-        ),
-    ]
-
-
-def test_ubmta_plan_requires_official_when_scientist_cannot_certify():
-    plan = build_signer_plan(
-        "biological_material_agreement",
-        information(recipient_scientist_can_certify_organization=False),
-    )
+def test_ubmta_plan_requires_scientist_and_separate_official():
+    plan = build_signer_plan("biological_material_agreement", information())
 
     assert [(signer.party, signer.order, signer.roles) for signer in plan.signers] == [
         ("recipient_scientist", 1, ("recipient_scientist",)),
@@ -79,23 +61,20 @@ def test_strict_plan_reports_all_missing_fields_before_delivery():
     assert caught.value.missing_fields == ("recipient_authorized_official_email",)
 
 
-def test_preview_plan_keeps_roles_visible_with_incomplete_identity_data():
+def test_ubmta_preview_never_requires_a_certification_decision():
     plan = build_signer_plan(
         "biological_material_agreement",
         information(
-            recipient_scientist_can_certify_organization=None,
             recipient_scientist_email="",
         ),
         strict=False,
     )
 
-    assert plan.decision_required == "recipient_scientist_can_certify_organization"
-    assert plan.missing_fields == (
-        "recipient_scientist_can_certify_organization",
-        "recipient_scientist_email",
-    )
+    assert not hasattr(plan, "decision_required")
+    assert plan.missing_fields == ("recipient_scientist_email",)
     assert [signer.party for signer in plan.signers] == [
         "recipient_scientist",
+        "recipient_authorized_official",
     ]
 
 

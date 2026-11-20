@@ -43,7 +43,6 @@ COMPLETE_AGREEMENT_INFORMATION = {
     "recipient_scientist_name": "Dr. Recipient",
     "recipient_scientist_title": "Associate Professor",
     "recipient_scientist_email": "recipient.scientist@example.org",
-    "recipient_scientist_can_certify_organization": False,
     "recipient_authorized_official_name": "Alex Official",
     "recipient_authorized_official_title": "Director of Research Agreements",
     "recipient_authorized_official_email": "recipient.official@example.org",
@@ -151,11 +150,8 @@ def request_for(*categories: str) -> dict:
     if categories == ("biological",):
         agreement.pop("shipping_recipient_name")
         agreement.pop("shipping_address")
-    elif categories in {("chemical",), ("animal_derived",)}:
-        agreement.pop("recipient_scientist_can_certify_organization")
     elif categories == ("device",):
         agreement.pop("recipient_scientist_title")
-        agreement.pop("recipient_scientist_can_certify_organization")
         agreement.pop("shipping_recipient_name")
         agreement.pop("shipping_address")
     return {

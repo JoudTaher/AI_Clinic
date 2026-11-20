@@ -22,8 +22,7 @@ plan rather than reproducing template branches.
 
 ## Review Focus
 
-- UBMTA Recipient Scientist can certify: one recipient identity fills two roles.
-- UBMTA Recipient Scientist cannot certify: a separate authorized official is required.
+- Current UBMTA branch: the certification-authority question has been removed. Biological requests use UBMTA and require a Recipient Scientist plus a separate Recipient Authorized Official. Authoritative organization/signatory verification and durable case records remain production requirements.
 - AUTM uses Recipient Authorized Signatory then Provider Scientist.
 - Simple Letter uses Recipient Scientist and Recipient Authorized Signatory before Provider Scientist.
 - Incomplete preview data remains displayable while strict delivery fails closed.

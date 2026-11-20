@@ -23,9 +23,9 @@ def _normalize_value(value: Any) -> Any:
 def format_requested_duration(years: Any, months: Any, comments: Any) -> str:
     parts: list[str] = []
     if isinstance(years, int) and not isinstance(years, bool) and years > 0:
-        parts.append(f"{years} year(s)")
+        parts.append(f"{years} {'year' if years == 1 else 'years'}")
     if isinstance(months, int) and not isinstance(months, bool) and months > 0:
-        parts.append(f"{months} month(s)")
+        parts.append(f"{months} {'month' if months == 1 else 'months'}")
     duration = ", ".join(parts)
     normalized_comments = comments.strip() if isinstance(comments, str) else ""
     return " — ".join(

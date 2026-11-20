@@ -21,6 +21,7 @@ from src.agreements.data import (
 from src.pipeline.models import RenderedAgreement
 from src.pipeline.ports import AgreementRenderError
 from src.request_normalization import normalize_request
+from src.request_identity import request_tracking_reference
 from src.templates.catalog import TemplateDefinition
 
 
@@ -172,6 +173,9 @@ class DocxAgreementRenderer:
             )
 
         request = normalize_request(request)
+        tracking_reference = request_tracking_reference(
+            request, submission_id, year=self.signed_on.year
+        )
         data = AgreementData.from_request(request, template.template_id)
         with ZipFile(template.source_path) as source:
             root = etree.fromstring(source.read("word/document.xml"))
@@ -189,7 +193,7 @@ class DocxAgreementRenderer:
 
             self.output_dir.mkdir(parents=True, exist_ok=True)
             destination = self.output_dir / (
-                f"{safe_identifier(submission_id)}-"
+                f"{safe_identifier(tracking_reference)}-"
                 f"{safe_identifier(template.template_id)}.docx"
             )
             descriptor, temporary_name = tempfile.mkstemp(
@@ -245,6 +249,22 @@ class DocxAgreementRenderer:
                     value,
                     font_size_half_points=18,
                 )
+            exhibit_notice = cls._paragraph_containing(
+                root, "If checked, this Agreement"
+            )
+            termination_term = cls._paragraph_containing(
+                root, "This Agreement shall terminate"
+            )
+            cls._set_plain_checkbox(exhibit_notice, checked=True)
+            cls._set_plain_checkbox(termination_term, checked=True)
+            cls._replace_between(
+                termination_term,
+                "This Agreement shall terminate ",
+                ".  Upon termination",
+                (
+                    f"{data.requested_duration} after the date of the last signature"
+                ),
+            )
             normalized_fee = data.transmittal_fee.casefold().replace(" ", "")
             if normalized_fee not in {
                 "",
@@ -257,11 +277,7 @@ class DocxAgreementRenderer:
                 "$0",
                 "$0.00",
             }:
-                exhibit_notice = cls._paragraph_containing(
-                    root, "If checked, this Agreement"
-                )
                 fee_term = cls._paragraph_containing(root, "A transmittal fee of")
-                cls._set_plain_checkbox(exhibit_notice, checked=True)
                 cls._set_plain_checkbox(fee_term, checked=True)
                 cls._replace_between(
                     fee_term,
@@ -509,16 +525,6 @@ class DocxAgreementRenderer:
             provider_cert_date, f"  Date:\t\t{provider_signature_date}"
         )
 
-        recipient_certifier_name = (
-            data.recipient_scientist_name
-            if data.recipient_scientist_can_certify_organization
-            else data.recipient_authorized_official_name
-        )
-        recipient_certifier_title = (
-            data.recipient_scientist_title
-            if data.recipient_scientist_can_certify_organization
-            else data.recipient_authorized_official_title
-        )
         recipient_certifier = cls._line_after_heading_containing(
             root, "RECIPIENT ORGANIZATION CERTIFICATION", "Authorized"
         )
@@ -526,7 +532,8 @@ class DocxAgreementRenderer:
             root, "RECIPIENT ORGANIZATION CERTIFICATION", "Official:"
         )
         _replace_paragraph_text(
-            recipient_certifier, f"   Authorized Official:\t{recipient_certifier_name}"
+            recipient_certifier,
+            f"   Authorized Official:\t{data.recipient_authorized_official_name}",
         )
         _replace_paragraph_text(leftover_official_label, "")
         recipient_certifier_title_line = cls._line_after_heading(
@@ -534,7 +541,7 @@ class DocxAgreementRenderer:
         )
         _replace_paragraph_text(
             recipient_certifier_title_line,
-            f"   Title:\t\t{recipient_certifier_title}",
+            f"   Title:\t\t{data.recipient_authorized_official_title}",
         )
         recipient_certifier_address = cls._line_after_heading(
             root, "RECIPIENT ORGANIZATION CERTIFICATION", "Address:"

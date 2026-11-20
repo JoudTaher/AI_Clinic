@@ -412,7 +412,6 @@ BOOLEAN_FIELD_IDS = {
     "clinical_health_data_shared",
     "recipient_pays_shipping",
     "material_provided_at_no_cost",
-    "recipient_scientist_can_certify_organization",
 }
 
 MISSING_FIELD_MESSAGES = {
@@ -561,14 +560,14 @@ st.html(
     'alt="Innovation Partnerships, University of Michigan" '
     'style="display:block;width:300px;max-width:100%;height:auto;'
     'border-radius:0;object-fit:contain;"></div>'
-    '<span class="clinic-project-label">AI Clinic · Proof of concept</span>'
+    '<span class="clinic-project-label">AI Clinic · Demonstration</span>'
 )
 with st.container(key="form_banner"):
-    st.title("Outgoing Material Transfer Agreement")
+    st.title("Outgoing MTA request")
     st.markdown(
         '<p class="banner-intro">Request an outgoing transfer of U-M research materials. '
-        'Your answers help determine eligibility for a standard MTA and prepare '
-        'the agreement for signature.</p>',
+        'Your answers determine whether the request can use the automated standard '
+        'process and provide the information needed to prepare the correct agreement.</p>',
         unsafe_allow_html=True,
     )
 if SIGNING_PREVIEW:
@@ -596,7 +595,7 @@ def clear_form() -> None:
 
 
 with st.container(key="preview_tools_button"):
-    with st.popover("Preview Tools"):
+    with st.popover("Demo tools"):
         with st.container(key="preview_menu_content"):
             st.button("Load sample data", on_click=load_sample_data, width="stretch")
             st.html('<div class="preview-menu-divider"></div>')
@@ -629,12 +628,14 @@ with fields_column:
         "This does not include paying a shipping fee.",
     )
     with st.container(key="field_expected_duration"):
+        st.session_state.setdefault("duration_years", 0)
+        st.session_state.setdefault("duration_months", 0)
         duration_years = st.number_input(
-            "Expected Duration — Years *", min_value=0, step=1, value=0, key="duration_years",
+            "Expected Duration — Years *", min_value=0, step=1, key="duration_years",
             help="Enter at least one month or one year across the duration fields.",
         )
         duration_months = st.number_input(
-            "Expected Duration — Months *", min_value=0, step=1, value=0, key="duration_months",
+            "Expected Duration — Months *", min_value=0, step=1, key="duration_months",
             help="Enter at least one month or one year across the duration fields.",
         )
         error_slot("expected_duration")
@@ -802,7 +803,9 @@ with fields_column:
         and selected_category in definition.material_categories
     ]
     selected_template_id = (
-        template_candidates[0] if len(template_candidates) == 1 else None
+        template_candidates[0]
+        if len(template_candidates) == 1 and HUMAN_MATERIAL_TYPE not in material_types
+        else None
     )
 
     provider_scientist_title = ""
@@ -811,7 +814,6 @@ with fields_column:
     material_description = ""
     shipping_recipient_name = ""
     shipping_address = ""
-    recipient_scientist_can_certify: bool | None = None
     recipient_official_name = ""
     recipient_official_title = ""
     recipient_official_email = ""
@@ -820,12 +822,14 @@ with fields_column:
     material_provided_at_no_cost: bool | None = None
     if selected_template_id is not None:
         with personnel_agreement_fields:
-            provider_scientist_title = st.text_input(
-                "Provider Scientist academic/job title (if known)"
+            provider_scientist_title = required_text_input(
+                "Provider Scientist academic/job title",
+                "provider_scientist_title",
             )
             if selected_template_id != "device_material_agreement":
-                recipient_scientist_title = st.text_input(
-                    "Recipient Scientist academic/job title (if known)"
+                recipient_scientist_title = required_text_input(
+                    "Recipient Scientist academic/job title",
+                    "recipient_scientist_title",
                 )
         with outgoing_agreement_fields:
             recipient_institution_address = required_text_area(
@@ -860,21 +864,12 @@ with fields_column:
                     "Shipping address", "shipping_address"
                 )
 
-            if selected_template_id == "biological_material_agreement":
-                recipient_scientist_can_certify = answer_input(
-                    "Recipient Scientist authorized to certify for Recipient Organization?",
-                    "recipient_scientist_can_certify_organization",
-                )
-
         preview_information: dict[str, object] = {
             "provider_scientist_name": contact_pi_name,
             "provider_scientist_title": provider_scientist_title,
             "recipient_scientist_name": recipient_scientist_name,
             "recipient_scientist_title": recipient_scientist_title,
             "recipient_scientist_email": recipient_scientist_email,
-            "recipient_scientist_can_certify_organization": (
-                recipient_scientist_can_certify
-            ),
         }
         preview_plan = build_signer_plan(
             selected_template_id, preview_information, strict=False
@@ -990,10 +985,6 @@ with fields_column:
                 "shipping_address": shipping_address,
             }
         )
-    if selected_template_id == "biological_material_agreement":
-        agreement_information[
-            "recipient_scientist_can_certify_organization"
-        ] = recipient_scientist_can_certify
     if recipient_official_name or recipient_official_title or recipient_official_email:
         agreement_information.update(
             {
@@ -1017,34 +1008,29 @@ with fields_column:
     )
     if review_complete:
         with st.container(key="signing_preview"):
-            st.markdown("#### Signing Preview")
+            st.markdown("#### Recipient signing plan")
             st.caption(
-                "Review the recipient-side SignNow invitations. Maggie Swift's provider "
-                "signature is already in the agreement, so U-M receives no SignNow invitation."
+                "These are the recipient-side SignNow invitations for the selected agreement. "
+                "Maggie Swift's U-M signature is already included in the approved template."
             )
-            if preview_plan.decision_required:
-                st.caption(
-                    "Answer whether the Recipient Scientist can certify for the Recipient Organization above to see the signing order."
-                )
-            else:
-                for signer in preview_plan.signers:
-                    with st.container(key=f"signer_group_{signer.party}"):
-                        st.html(
-                            f'<div class="signer-order-label">Signing order {signer.order}</div>'
-                            '<section class="signer-summary" aria-label="Signing order '
-                            f'{signer.order}">'
-                            '<dl>'
-                            f'<dt>Role</dt><dd>{escape(signer.label)}</dd>'
-                            f'<dt>Name</dt><dd>{escape(signer.name or "Not entered")}</dd>'
-                            f'<dt>Email</dt><dd>{escape(signer.email or "Not entered")}</dd>'
-                            '</dl>'
-                            '</section>'
-                        )
-                        st.caption(
-                            "From Outgoing Material Details"
-                            if signer.party == "recipient_scientist"
-                            else "From Agreement and Signing Information"
-                        )
+            for signer in preview_plan.signers:
+                with st.container(key=f"signer_group_{signer.party}"):
+                    st.html(
+                        f'<div class="signer-order-label">Signing order {signer.order}</div>'
+                        '<section class="signer-summary" aria-label="Signing order '
+                        f'{signer.order}">'
+                        '<dl>'
+                        f'<dt>Role</dt><dd>{escape(signer.label)}</dd>'
+                        f'<dt>Name</dt><dd>{escape(signer.name or "Not entered")}</dd>'
+                        f'<dt>Email</dt><dd>{escape(signer.email or "Not entered")}</dd>'
+                        '</dl>'
+                        '</section>'
+                    )
+                    st.caption(
+                        "From Outgoing Material Details"
+                        if signer.party == "recipient_scientist"
+                        else "From Agreement and Signing Information"
+                    )
     else:
         with st.container(key="agreement_empty_state"):
             st.info("Please recheck the form and complete the required fields above to review the signing information.")
@@ -1063,7 +1049,7 @@ with fields_column:
                 "Local preview: creates an agreement and signing package. No emails will be sent."
             )
 
-        submitted = st.button("Prepare final agreement review", type="primary")
+        submitted = st.button("Review generated agreement", type="primary")
 
     if submitted or st.session_state.get("show_sample_validation", False):
         issue_ids = set()
@@ -1149,15 +1135,15 @@ with fields_column:
             no_cost_slot = field_error_slots.get("material_provided_at_no_cost")
             if no_cost_slot is not None:
                 no_cost_slot.warning(
-                    "This answer is complete, but it requires manual special-case review "
+                    "This answer is complete, but the request needs staff review "
                     "because the standard agreement templates are for no-cost transfers "
                     "apart from permitted preparation, distribution, or shipping charges."
                 )
 
         st.divider()
-        st.header("Processing Result")
+        st.header("Request assessment")
         if intake_readiness["status"] == "ready":
-            st.success("Requester questionnaire is complete.")
+            st.success("The request form is complete.")
         else:
             st.warning(
                 "Requester questionnaire is incomplete: "
@@ -1165,25 +1151,25 @@ with fields_column:
             )
 
         if eligibility["status"] == "eligible":
-            st.success("Eligible for Standard MTA automatic approval under the checklist.")
+            st.success("Eligible for the automated standard MTA process.")
         elif eligibility["status"] == "ineligible":
             st.error(
-                "Not eligible for Standard MTA automatic approval; "
-                "manual special-case review is required."
+                "Not eligible for the automated standard MTA process. "
+                "Staff review is required."
             )
         else:
             st.warning(
-                "Eligibility is unresolved; manual special-case review is required."
+                "The checklist could not confirm eligibility. Staff review is required."
             )
         st.write(eligibility["explanation"])
 
         result_left, result_right = st.columns(2)
         with result_left:
-            show_check_list("Passed checks", eligibility["passed_checks"])
-            show_check_list("Failed checks", eligibility["failed_checks"])
+            show_check_list("Checklist conditions met", eligibility["passed_checks"])
+            show_check_list("Checklist conditions not met", eligibility["failed_checks"])
         with result_right:
-            show_check_list("Unanswered checks", eligibility["missing_information"])
-            st.markdown("**Agreement information**")
+            show_check_list("Conditions needing review", eligibility["missing_information"])
+            st.markdown("**Agreement preparation**")
             st.write(agreement_readiness["status"].replace("_", " ").title())
             if agreement_readiness["missing_fields"]:
                 st.write("Missing: " + ", ".join(agreement_readiness["missing_fields"]))
@@ -1191,7 +1177,7 @@ with fields_column:
                 for message in agreement_readiness["validation_errors"].values():
                     st.write(message)
 
-        st.markdown("**Template decision**")
+        st.markdown("**Selected agreement**")
         if template_result["selected_template"]:
             selected_id = template_result["selected_template"]
             selected_detail = next(
@@ -1199,13 +1185,13 @@ with fields_column:
                 for detail in template_result["candidate_details"]
                 if detail["template_id"] == selected_id
             )
-            st.success("Selected template: " + selected_detail["display_name"])
+            st.success(selected_detail["display_name"])
         else:
             for reason in template_result["review_reasons"]:
                 st.caption(reason)
 
         if pipeline_result.status == "review_required":
-            st.markdown("**Automation result**")
+            st.markdown("**Next step**")
             st.info(
                 "The populated agreement is ready for final review. "
                 "No SignNow API request or local signing delivery has occurred."
@@ -1238,6 +1224,12 @@ with fields_column:
                 )
             else:
                 review_rows = [
+                    {
+                        "Section": "Request",
+                        "Field": "MTA reference",
+                        "Value": pipeline_result.tracking_reference,
+                    },
+                ] + [
                     {
                         "Section": field.section,
                         "Field": field.label,
@@ -1308,15 +1300,16 @@ with fields_column:
                     st.session_state[review_result_key] = pipeline_result
 
         if pipeline_result.status in {"prepared_for_signature", "sent_for_signature"}:
-            st.markdown("**Automation result**")
+            st.markdown("**Delivery result**")
+            st.write("MTA reference: " + pipeline_result.tracking_reference)
             if pipeline_result.status == "sent_for_signature":
-                st.success("Agreement sent through SignNow Development Mode.")
+                st.success("Recipient signature request sent through the SignNow test environment.")
                 st.caption(
                     "SignNow document ID: "
                     + (pipeline_result.delivery_reference or "Unavailable")
                 )
             else:
-                st.success("Agreement and local SignNow package are ready.")
+                st.success("Agreement and local signing package are ready.")
             agreement_path = Path(pipeline_result.artifact_path or "")
             manifest_path = Path(pipeline_result.delivery_reference or "")
             if agreement_path.is_file():
@@ -1344,13 +1337,18 @@ with fields_column:
         elif pipeline_result.status == "agreement_incomplete":
             st.warning("Complete the agreement and signing information and prepare it again.")
         elif pipeline_result.status == "manual_special_case_review":
-            st.warning("This request requires manual special-case MTA review in eRPM.")
+            st.warning(
+                "This request cannot use the automated standard process and should "
+                "continue through the department's staff-review workflow."
+            )
         elif pipeline_result.status not in {"review_required"}:
             st.error("Automatic processing stopped: " + "; ".join(pipeline_result.reasons))
 
         st.download_button(
             "Download screening report",
             data=serialize_screening_report(report),
-            file_name="mta_screening_report.json",
+            file_name=(
+                f"{pipeline_result.tracking_reference}-screening-report.json"
+            ),
             mime="application/json",
         )

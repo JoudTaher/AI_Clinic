@@ -108,6 +108,8 @@ def test_standard_request_is_auto_approved_and_prepared():
     assert review.status == "review_required"
     assert review.selected_template == "chemical_material_agreement"
     assert review.submission_id.startswith("mta-")
+    assert review.tracking_reference.startswith("MTA-2026-")
+    assert len(review.tracking_reference) == len("MTA-2026-") + 8
     assert review.review_reference
     assert renderer.calls == 1
     assert sender.calls == 0
@@ -122,6 +124,7 @@ def test_standard_request_is_auto_approved_and_prepared():
     )
 
     assert result.status == "prepared_for_signature"
+    assert result.tracking_reference == review.tracking_reference
     assert "auto_approved:standard_rules" in result.audit_events
     assert renderer.calls == 1
     assert sender.calls == 1
@@ -230,6 +233,7 @@ def test_auto_selected_request_is_rendered_and_prepared_for_signature():
     assert result.delivery_mode == "signnow_package"
     assert result.submission_id in (result.artifact_path or "")
     assert result.delivery_reference == f"dry-run:{result.submission_id}"
+    assert sender.last_request["tracking_reference"] == result.tracking_reference
     assert "auto_approved:standard_rules" in result.audit_events
     assert renderer.calls == 1
     assert sender.calls == 1
@@ -314,7 +318,7 @@ def test_ambiguous_other_model_organism_requires_manual_review():
 
 def test_transmittal_fee_is_derived_from_questionnaire_reimbursement_value():
     pipeline, renderer, sender = pipeline_with_recorders()
-    request = request_for("biological")
+    request = request_for("chemical")
     request["erpm_intake"]["reimbursement_cost_or_fee"] = "$100.00"
     request["agreement_information"]["transmittal_fee"] = "$999.00"
 

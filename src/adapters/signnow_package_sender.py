@@ -12,6 +12,7 @@ from src.adapters.paths import safe_identifier
 from src.pipeline.models import DeliveryReceipt, RenderedAgreement
 from src.pipeline.ports import DeliveryError
 from src.request_normalization import normalize_request
+from src.request_identity import request_tracking_reference, searchable_document_name
 from src.signing.plan import SignerPlanError, build_signer_plan
 
 
@@ -56,6 +57,12 @@ class SignNowPackageSender:
         if not isinstance(raw_information, Mapping):
             raise DeliveryError("agreement_information must be an object")
         signers = self.signers_for(artifact.template_id, raw_information)
+        tracking_reference = request_tracking_reference(request, submission_id)
+        raw_intake = request.get("erpm_intake", {})
+        intake = raw_intake if isinstance(raw_intake, Mapping) else {}
+        document_name = searchable_document_name(
+            tracking_reference, intake.get("project_title")
+        )
 
         manifest = {
             "audit_events": [
@@ -65,12 +72,14 @@ class SignNowPackageSender:
             ],
             "delivery_mode": "signnow_package",
             "document": {
+                "name": document_name,
                 "path": str(artifact.path.resolve()),
                 "sha256": hashlib.sha256(artifact.path.read_bytes()).hexdigest(),
             },
             "live_submission": False,
             "provider": "U-M SignNow",
             "submission_id": submission_id,
+            "tracking_reference": tracking_reference,
             "schema_version": 1,
             "signers": signers,
             "template_id": artifact.template_id,
@@ -78,7 +87,7 @@ class SignNowPackageSender:
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         destination = self.output_dir / (
-            f"{safe_identifier(submission_id)}.signing.json"
+            f"{safe_identifier(tracking_reference)}.signing.json"
         )
         descriptor, temporary_name = tempfile.mkstemp(
             dir=self.output_dir, prefix=".signing-", suffix=".json"

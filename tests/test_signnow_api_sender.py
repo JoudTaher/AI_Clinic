@@ -153,6 +153,7 @@ def test_missing_credentials_fail_before_upload(tmp_path: Path, missing_field: s
 
 def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path):
     request, artifact = rendered_agreement(tmp_path, "chemical")
+    request["tracking_reference"] = "MTA-2026-7F3A91C2"
     roles = [
         ROLE_NAMES["recipient_authorized_signatory"],
     ]
@@ -170,6 +171,9 @@ def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path)
 
     upload = transport.uploads[0]
     assert upload["path"] == "/document/fieldextract"
+    assert upload["filename"] == (
+        "MTA-2026-7F3A91C2 — Synthetic compound transfer.docx"
+    )
     assert "{{provider_authorized_signatory_signature}}" not in upload["document_xml"]
     uploaded_root = etree.fromstring(upload["document_xml"].encode("utf-8"))
     uploaded_text = "".join(
@@ -212,38 +216,6 @@ def test_autm_uploads_tagged_copy_and_sends_ordered_field_invite(tmp_path: Path)
     ]
     assert "subject" not in invite["payload"]
     assert "message" not in invite["payload"]
-
-
-def test_ubmta_certifying_recipient_gets_one_invitation_for_both_roles(
-    tmp_path: Path,
-):
-    request, artifact = rendered_agreement(tmp_path, "biological")
-    request["agreement_information"][
-        "recipient_scientist_can_certify_organization"
-    ] = True
-    transport = RecordingTransport(
-        [
-            ROLE_NAMES["recipient_scientist"],
-        ]
-    )
-    sender = SignNowApiSender(settings(), transport)
-
-    sender.send("REQ-UBMTA-CERTIFYING-RECIPIENT", request, artifact)
-
-    tags = json.loads(transport.uploads[0]["fields"]["Tags"])
-    recipient_tags = [
-        item for item in tags if item["tag_name"].startswith("recipient_")
-    ]
-    assert len(recipient_tags) == 4
-    assert {item["role"] for item in recipient_tags} == {"Recipient Scientist"}
-
-    invitees = transport.requests[-1]["payload"]["to"]
-    assert [item["email"] for item in invitees] == [
-        "recipient.scientist@example.org",
-    ]
-    assert [item["role"] for item in invitees] == [
-        "Recipient Scientist",
-    ]
 
 
 @pytest.mark.parametrize(

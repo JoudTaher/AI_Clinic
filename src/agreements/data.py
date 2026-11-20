@@ -29,8 +29,8 @@ class AgreementData:
     recipient_scientist_title: str
     recipient_authorized_official_name: str
     recipient_authorized_official_title: str
-    recipient_scientist_can_certify_organization: bool
     material_description: str
+    requested_duration: str
     shipping_recipient_name: str
     shipping_address: str
     transmittal_fee: str
@@ -62,14 +62,12 @@ class AgreementData:
         if not isinstance(fee, str):
             raise AgreementDataError("transmittal_fee must be text")
 
-        can_certify = raw.get("recipient_scientist_can_certify_organization")
-        if not isinstance(can_certify, bool):
-            can_certify = False
         requires_recipient_official = template_id in {
             "chemical_material_agreement",
             "animal_material_agreement",
             "device_material_agreement",
-        } or (template_id == "biological_material_agreement" and not can_certify)
+            "biological_material_agreement",
+        }
 
         recipient_official_name = (
             required("recipient_authorized_official_name")
@@ -86,15 +84,22 @@ class AgreementData:
             provider_organization=PROVIDER_ORGANIZATION,
             provider_address=PROVIDER_ADDRESS,
             provider_scientist_name=required("provider_scientist_name"),
-            provider_scientist_title=optional("provider_scientist_title"),
+            provider_scientist_title=required("provider_scientist_title"),
             recipient_organization=required("recipient_institution_name"),
             recipient_address=required("recipient_institution_address"),
             recipient_scientist_name=required("recipient_scientist_name"),
-            recipient_scientist_title=optional("recipient_scientist_title"),
+            recipient_scientist_title=required_for(
+                "recipient_scientist_title",
+                {
+                    "chemical_material_agreement",
+                    "animal_material_agreement",
+                    "biological_material_agreement",
+                },
+            ),
             recipient_authorized_official_name=recipient_official_name,
             recipient_authorized_official_title=recipient_official_title,
-            recipient_scientist_can_certify_organization=can_certify,
             material_description=required("material_description"),
+            requested_duration=required("requested_duration"),
             shipping_recipient_name=required_for(
                 "shipping_recipient_name", {"chemical_material_agreement", "animal_material_agreement"}
             ),

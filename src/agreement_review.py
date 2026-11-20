@@ -60,10 +60,8 @@ FIELD_LABELS = {
     "recipient_scientist_title": "Recipient Scientist academic or job title",
     "recipient_authorized_official_name": "Recipient Authorized Official full name",
     "recipient_authorized_official_title": "Recipient Authorized Official title",
-    "recipient_scientist_can_certify_organization": (
-        "Recipient Scientist can certify for Recipient Organization"
-    ),
     "material_description": "Material description",
+    "requested_duration": "Agreement period after the last signature",
     "shipping_recipient_name": "Shipping recipient name",
     "shipping_address": "Shipping address",
     "transmittal_fee": "Transmittal or reimbursement fee",
@@ -91,6 +89,8 @@ def _section(field_id: str) -> str:
         return "Agreement parties"
     if field_id in {"material_description", "transmittal_fee"}:
         return "Material and fee"
+    if field_id == "requested_duration":
+        return "Agreement term"
     if field_id in {"shipping_recipient_name", "shipping_address"}:
         return "Shipping"
     return "Organizations"
@@ -100,14 +100,9 @@ def _review_fields(data: AgreementData, template_id: str) -> tuple[ReviewField, 
     raw = asdict(data)
     fields: list[ReviewField] = []
     for field_id, label in FIELD_LABELS.items():
-        if field_id == "recipient_scientist_can_certify_organization":
-            if template_id != "biological_material_agreement":
-                continue
-            value = "Yes" if raw[field_id] else "No"
-        else:
-            value = raw[field_id]
-            if not isinstance(value, str) or not value:
-                continue
+        value = raw[field_id]
+        if not isinstance(value, str) or not value:
+            continue
         fields.append(
             ReviewField(
                 field_id=field_id,
@@ -217,9 +212,11 @@ def _reference(
     request: Mapping[str, Any], template_id: str, artifact_path: Path
 ) -> str:
     document_hash = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    normalized_request = normalize_request(request)
+    normalized_request.pop("tracking_reference", None)
     payload = {
         "document_sha256": document_hash,
-        "request": normalize_request(request),
+        "request": normalized_request,
         "template_id": template_id,
     }
     serialized = json.dumps(

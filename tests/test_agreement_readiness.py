@@ -4,7 +4,7 @@ from tests.fixtures import plasmid_request, request_for, verified_facts_for
 
 
 def test_complete_information_is_ready():
-    result = evaluate_agreement_readiness(plasmid_request())
+    result = evaluate_agreement_readiness(request_for("chemical"))
     assert result == {
         "status": "ready",
         "missing_fields": [],
@@ -14,10 +14,10 @@ def test_complete_information_is_ready():
 
 
 def test_missing_agreement_data_does_not_change_eligibility():
-    request = plasmid_request()
+    request = request_for("chemical")
     request["erpm_intake"]["recipient_experimental_plan"] = ""
     assert (
-        evaluate_eligibility(request, verified_facts_for("biological"))["status"]
+        evaluate_eligibility(request, verified_facts_for("chemical"))["status"]
         == "eligible"
     )
     result = evaluate_agreement_readiness(request)
@@ -26,7 +26,7 @@ def test_missing_agreement_data_does_not_change_eligibility():
 
 
 def test_whitespace_only_value_is_missing():
-    request = plasmid_request()
+    request = request_for("chemical")
     request["agreement_information"]["material_description"] = "   "
     result = evaluate_agreement_readiness(request)
     assert result["status"] == "missing_information"
@@ -37,7 +37,9 @@ def test_ubmta_does_not_require_shipping_address():
     request = plasmid_request()
     request["agreement_information"].pop("shipping_address", None)
 
-    result = evaluate_agreement_readiness(request)
+    result = evaluate_agreement_readiness(
+        request, template_id="biological_material_agreement"
+    )
 
     assert result["status"] == "ready"
 
@@ -46,7 +48,9 @@ def test_autm_request_requires_recipient_authorized_official():
     request = request_for("chemical")
     request["agreement_information"]["recipient_authorized_official_email"] = ""
 
-    result = evaluate_agreement_readiness(request)
+    result = evaluate_agreement_readiness(
+        request, template_id="biological_material_agreement"
+    )
 
     assert result["status"] == "missing_information"
     assert "recipient_authorized_official_email" in result["missing_fields"]
@@ -72,29 +76,34 @@ def test_simple_letter_requires_recipient_authorized_official():
     assert "recipient_authorized_official_name" in result["missing_fields"]
 
 
-def test_ubmta_scientist_certifier_does_not_require_separate_official():
+def test_ubmta_requires_separate_recipient_official():
     request = plasmid_request()
     information = request["agreement_information"]
-    information["recipient_scientist_can_certify_organization"] = True
     information["recipient_authorized_official_name"] = ""
     information["recipient_authorized_official_title"] = ""
     information["recipient_authorized_official_email"] = ""
 
-    result = evaluate_agreement_readiness(request)
+    result = evaluate_agreement_readiness(
+        request, template_id="biological_material_agreement"
+    )
 
-    assert result["status"] == "ready"
+    assert result["status"] == "missing_information"
+    assert "recipient_authorized_official_name" in result["missing_fields"]
+    assert "recipient_authorized_official_title" in result["missing_fields"]
+    assert "recipient_authorized_official_email" in result["missing_fields"]
 
 
-def test_ubmta_scientist_certifier_ignores_stale_official_email():
+def test_ubmta_validates_separate_official_email():
     request = plasmid_request()
     information = request["agreement_information"]
-    information["recipient_scientist_can_certify_organization"] = True
     information["recipient_authorized_official_email"] = "stale invalid email"
 
-    result = evaluate_agreement_readiness(request)
+    result = evaluate_agreement_readiness(
+        request, template_id="biological_material_agreement"
+    )
 
-    assert result["status"] == "ready"
-    assert result["validation_errors"] == {}
+    assert result["status"] == "missing_information"
+    assert "recipient_authorized_official_email" in result["validation_errors"]
 
 
 def test_ubmta_does_not_require_autm_shipping_slots():
@@ -103,7 +112,9 @@ def test_ubmta_does_not_require_autm_shipping_slots():
     information.pop("shipping_recipient_name", None)
     information.pop("shipping_address", None)
 
-    result = evaluate_agreement_readiness(request)
+    result = evaluate_agreement_readiness(
+        request, template_id="biological_material_agreement"
+    )
 
     assert result["status"] == "ready"
 
@@ -120,16 +131,46 @@ def test_simple_letter_does_not_require_unprinted_recipient_title_or_shipping():
     assert result["status"] == "ready"
 
 
-def test_scientist_academic_titles_are_optional_for_all_templates():
+def test_provider_scientist_title_is_required_for_every_template():
     for category in ("chemical", "animal_derived", "biological", "device"):
         request = request_for(category)
-        information = request["agreement_information"]
-        information["provider_scientist_title"] = ""
-        information["recipient_scientist_title"] = ""
+        request["agreement_information"]["provider_scientist_title"] = ""
 
-        result = evaluate_agreement_readiness(request)
+        result = evaluate_agreement_readiness(
+            request,
+            template_id=(
+                "biological_material_agreement"
+                if category == "biological"
+                else None
+            ),
+        )
 
-        assert result["status"] == "ready", category
+        assert result["status"] == "missing_information", category
+        assert "provider_scientist_title" in result["missing_fields"]
+
+
+def test_recipient_scientist_title_is_required_only_when_template_prints_it():
+    for category in ("chemical", "animal_derived", "biological"):
+        request = request_for(category)
+        request["agreement_information"]["recipient_scientist_title"] = ""
+
+        result = evaluate_agreement_readiness(
+            request,
+            template_id=(
+                "biological_material_agreement"
+                if category == "biological"
+                else None
+            ),
+        )
+
+        assert result["status"] == "missing_information", category
+        assert "recipient_scientist_title" in result["missing_fields"]
+
+    device = request_for("device")
+    device["agreement_information"]["recipient_scientist_title"] = ""
+    result = evaluate_agreement_readiness(device)
+    assert result["status"] == "ready"
+    assert "recipient_scientist_title" not in result["missing_fields"]
 
 
 def test_autm_still_requires_template_shipping_slots():
@@ -158,7 +199,7 @@ def test_agreement_readiness_is_not_applicable_without_one_supported_template():
 
 
 def test_checklist_required_shipping_and_no_cost_answers_are_required():
-    request = plasmid_request()
+    request = request_for("chemical")
     request["agreement_information"].pop("recipient_pays_shipping")
 
     result = evaluate_agreement_readiness(request)
@@ -168,7 +209,7 @@ def test_checklist_required_shipping_and_no_cost_answers_are_required():
 
 
 def test_recipient_not_paying_shipping_is_still_complete_standard_information():
-    request = plasmid_request()
+    request = request_for("chemical")
     request["agreement_information"]["recipient_pays_shipping"] = False
 
     result = evaluate_agreement_readiness(request)
@@ -182,7 +223,7 @@ def test_recipient_not_paying_shipping_is_still_complete_standard_information():
 
 
 def test_provider_scientist_signing_email_is_not_required_for_one_sided_delivery():
-    request = plasmid_request()
+    request = request_for("chemical")
     request["agreement_information"].pop("provider_scientist_email", None)
 
     result = evaluate_agreement_readiness(request)
@@ -193,7 +234,7 @@ def test_provider_scientist_signing_email_is_not_required_for_one_sided_delivery
 
 
 def test_special_case_cost_term_requires_manual_review():
-    request = plasmid_request()
+    request = request_for("chemical")
     request["agreement_information"]["material_provided_at_no_cost"] = False
 
     result = evaluate_agreement_readiness(request)

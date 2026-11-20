@@ -9,7 +9,7 @@
   },
   {
     "id": "animal_material_agreement",
-    "display_name": "Animal Material Agreement",
+    "display_name": "AUTM Biological Agreement for Animal Materials",
     "source_file": "reference_files/Template_AUTM_Animal.docx",
     "material_categories": ["animal_derived"],
     "required_context": {},
@@ -25,7 +25,7 @@
   },
   {
     "id": "biological_material_agreement",
-    "display_name": "Biological Material Agreement",
+    "display_name": "UBMTA Agreement for Biological Materials",
     "source_file": "reference_files/Template_UBMTA_Biological.docx",
     "material_categories": ["biological"],
     "required_context": {},

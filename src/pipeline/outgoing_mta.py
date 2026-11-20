@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -22,6 +20,7 @@ from src.pipeline.ports import (
     PipelineStore,
 )
 from src.request_normalization import normalize_request
+from src.request_identity import submission_identity
 from src.templates.catalog import TemplateDefinition, load_template_catalog
 from src.templates.selector import select_template
 
@@ -62,21 +61,9 @@ class OutgoingMTAPipeline:
         confirmation: AgreementConfirmation | None = None,
     ) -> PipelineResult:
         request = normalize_request(request)
-        submission_basis = {
-            "request": request,
-            "verified_facts": self.verified_facts,
-        }
-        serialized_request = json.dumps(
-            submission_basis,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            default=str,
-        )
-        request_fingerprint = hashlib.sha256(
-            serialized_request.encode("utf-8")
-        ).hexdigest()
-        submission_id = f"mta-{request_fingerprint}"
+        identity = submission_identity(request, self.verified_facts)
+        submission_id = identity.submission_id
+        tracking_reference = identity.tracking_reference
         existing = self.store.get(submission_id)
         if existing is not None:
             if existing.status != "review_required":
@@ -88,12 +75,16 @@ class OutgoingMTAPipeline:
             ):
                 return existing
 
+        request = dict(request)
+        request["tracking_reference"] = tracking_reference
+
         intake_readiness = evaluate_intake_readiness(request)
         if intake_readiness["status"] == "missing_information":
             reasons = list(intake_readiness["missing_fields"])
             reasons.extend(intake_readiness["validation_errors"])
             return PipelineResult(
                 submission_id=submission_id,
+                tracking_reference=tracking_reference,
                 status="intake_incomplete",
                 reasons=tuple(reasons),
                 audit_events=("intake_checked",),
@@ -107,6 +98,7 @@ class OutgoingMTAPipeline:
         if selection["status"] != "template_selected":
             return PipelineResult(
                 submission_id=submission_id,
+                tracking_reference=tracking_reference,
                 status="manual_special_case_review",
                 reasons=tuple(selection["review_reasons"]),
                 audit_events=audit + ("manual_special_case_review",),
@@ -122,6 +114,7 @@ class OutgoingMTAPipeline:
                 reasons.extend(agreement_readiness["review_reasons"])
             return PipelineResult(
                 submission_id=submission_id,
+                tracking_reference=tracking_reference,
                 status="agreement_incomplete",
                 selected_template=selected_template,
                 reasons=tuple(reasons),
@@ -130,6 +123,7 @@ class OutgoingMTAPipeline:
         if agreement_readiness["status"] != "ready":
             return PipelineResult(
                 submission_id=submission_id,
+                tracking_reference=tracking_reference,
                 status="manual_special_case_review",
                 selected_template=selected_template,
                 reasons=tuple(agreement_readiness["review_reasons"]),
@@ -174,6 +168,7 @@ class OutgoingMTAPipeline:
             except (AgreementRenderError, ValueError) as error:
                 return PipelineResult(
                     submission_id=submission_id,
+                    tracking_reference=tracking_reference,
                     status="generation_failed",
                     selected_template=selected_template,
                     reasons=(str(error),),
@@ -181,6 +176,7 @@ class OutgoingMTAPipeline:
                 )
             result = PipelineResult(
                 submission_id=submission_id,
+                tracking_reference=tracking_reference,
                 status="review_required",
                 selected_template=selected_template,
                 artifact_path=str(artifact.path),
@@ -201,6 +197,7 @@ class OutgoingMTAPipeline:
         except DeliveryError as error:
             return PipelineResult(
                 submission_id=submission_id,
+                tracking_reference=tracking_reference,
                 status="delivery_failed",
                 selected_template=selected_template,
                 artifact_path=str(artifact.path),
@@ -215,6 +212,7 @@ class OutgoingMTAPipeline:
         )
         result = PipelineResult(
             submission_id=submission_id,
+            tracking_reference=tracking_reference,
             status=receipt.status,
             selected_template=selected_template,
             artifact_path=str(artifact.path),
